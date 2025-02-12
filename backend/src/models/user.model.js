@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    phone: {
+    phoneNumber: {
       type: String,
       required: true,
       unique: true,
@@ -27,14 +27,6 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin", "superadmin"],
       default: "user",
     },
-    otp: {
-      code: {
-        type: String,
-      },
-      expiresAt: {
-        type: Date,
-      }
-    },
     isVerified: {
       type: Boolean,
       default: false,
@@ -52,8 +44,5 @@ userSchema.pre("save", async function (next) {
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
-
-// Index for OTP expiry
-userSchema.index({ "otp.expiresAt": 1 }, { expireAfterSeconds: 0 });
 
 export default mongoose.model("User", userSchema);

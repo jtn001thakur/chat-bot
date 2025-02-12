@@ -2,13 +2,13 @@ import mongoose from 'mongoose';
 
 const config = {
     development: {
-        db: 'mongodb://127.0.0.1:27017/chat_app_dev'
+         db: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/chat_bot'
     },
     production: {
         db: process.env.MONGODB_URI
     },
     test: {
-        db: 'mongodb://127.0.0.1:27017/chat_app_test'
+        db: 'mongodb://127.0.0.1:27017/chat_bot'
     }
 };
 
