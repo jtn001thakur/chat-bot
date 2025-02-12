@@ -1,27 +1,44 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { 
+  FaUser, 
+  FaSignOutAlt, 
+  FaCog, 
+  FaChevronDown, 
+  FaChevronUp 
+} from 'react-icons/fa';
 import { getUserInfo, handleLogout } from '../utils/localStorageUtils';
 import { authApi } from '../utils/api';
-
+import { useConfirmation } from '../contexts/ConfirmationContext';
 
 const Header = () => {
   const navigate = useNavigate();
+  const confirm = useConfirmation();
   const userInfo = getUserInfo();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleLogoutClick = async () => {
-    try {
-      // Call logout API
-      await authApi.logout();
-      
-      // Clear local storage and redirect
-      handleLogout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-      // Force logout even if API call fails
-      handleLogout();
-      navigate('/login');
+    const confirmed = await confirm({
+      title: 'Logout',
+      message: 'Are you sure you want to log out?',
+      variant: 'danger'
+    });
+
+    if (confirmed) {
+      try {
+        // Call logout API
+        await authApi.logout();
+        
+        // Clear local storage and redirect
+        handleLogout();
+        navigate('/login');
+      } catch (error) {
+        console.error('Logout failed:', error);
+        // Force logout even if API call fails
+        handleLogout();
+        navigate('/login');
+      }
     }
   };
 
@@ -29,52 +46,88 @@ const Header = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
 
+  const menuItems = [
+    { 
+      icon: <FaUser />, 
+      label: 'Profile', 
+      onClick: () => {
+        navigate('/profile');
+        setIsDropdownOpen(false);
+      }
+    },
+    { 
+      icon: <FaCog />, 
+      label: 'Settings', 
+      onClick: () => {
+        navigate('/settings');
+        setIsDropdownOpen(false);
+      }
+    },
+    { 
+      icon: <FaSignOutAlt />, 
+      label: 'Logout', 
+      onClick: handleLogoutClick,
+      className: 'text-red-500'
+    }
+  ];
+
   return (
-    <header className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
+    <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-md shadow-sm">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <div className="text-xl font-bold text-gray-800">
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          className="text-xl font-bold text-gray-800"
+        >
           Dashboard
-        </div>
-        <div className="relative">
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          className="relative"
+        >
           <button 
             onClick={toggleDropdown}
-            className="flex items-center space-x-2 text-gray-700 hover:text-gray-900"
+            className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 transition"
           >
-            <span className="font-medium">{userInfo?.name || 'User'}</span>
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-5 w-5" 
-              viewBox="0 0 20 20" 
-              fill="currentColor"
-            >
-              <path 
-                fillRule="evenodd" 
-                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" 
-                clipRule="evenodd" 
-              />
-            </svg>
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center">
+                {userInfo?.name ? userInfo.name[0].toUpperCase() : 'U'}
+              </div>
+              <span className="font-medium hidden md:inline">
+                {userInfo?.name || 'User'}
+              </span>
+            </div>
+            {isDropdownOpen ? <FaChevronUp /> : <FaChevronDown />}
           </button>
 
-          {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl overflow-hidden">
-              <button
-                onClick={() => {
-                  navigate('/profile');
-                  setIsDropdownOpen(false);
-                }}
-                className="block w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100"
+          <AnimatePresence>
+            {isDropdownOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg overflow-hidden border"
               >
-                Profile
-              </button>
-              <button
-                onClick={handleLogoutClick}
-                className="block w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100"
-              >
-                Logout
-              </button>
-            </div>
-          )}
-        </div>
+                {menuItems.map((item, index) => (
+                  <button
+                    key={index}
+                    onClick={item.onClick}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-gray-100 transition 
+                      ${item.className || ''}`}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       </div>
     </header>
   );

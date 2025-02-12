@@ -4,6 +4,7 @@ import { getUserInfo, isAuthenticated } from './utils/localStorageUtils';
 import { publicRoutes } from './routes/publicRoutes';
 import { privateRoutes } from './routes/privateRoutes';
 import Unauthorized from './components/Unauthorized';
+import { ConfirmationProvider } from './contexts/ConfirmationContext';
 
 function App() {
   const [userRole, setUserRole] = useState(null);
@@ -40,28 +41,30 @@ function App() {
   }
 
   return (
-    <Routes>
-      {/* Public Routes */}
-      {publicRoutes.map((route) => (
-        <Route 
-          key={route.path} 
-          path={route.path} 
-          element={route.element} 
-        />
-      ))}
+    <ConfirmationProvider>
+      <Routes>
+        {/* Public Routes */}
+        {publicRoutes.map((route) => (
+          <Route 
+            key={route.path} 
+            path={route.path} 
+            element={route.element} 
+          />
+        ))}
 
-      {/* Private Routes */}
-      {privateRoutes.map((route) => (
-        <Route 
-          key={route.path} 
-          path={route.path} 
-          element={route.element} 
-        />
-      ))}
+        {/* Private Routes */}
+        {privateRoutes.map((route) => (
+          <Route 
+            key={route.path} 
+            path={route.path} 
+            element={route.element} 
+          />
+        ))}
 
-      {/* Unauthorized Route */}
-      <Route path="/unauthorized" element={<Unauthorized />} />
-    </Routes>
+        {/* Unauthorized Route */}
+        <Route path="/unauthorized" element={<Unauthorized />} />
+      </Routes>
+    </ConfirmationProvider>
   );
 }
 
