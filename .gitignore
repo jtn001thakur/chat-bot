@@ -1,0 +1,7 @@
+# Ignore node_modules and package-lock.json in specific directories
+backend/node_modules/
+backend/package-lock.json
+frontend/node_modules/
+frontend/package-lock.json
+socket/node_modules/
+socket/package-lock.json
