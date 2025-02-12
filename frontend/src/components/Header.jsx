@@ -56,14 +56,6 @@ const Header = () => {
       }
     },
     { 
-      icon: <FaCog />, 
-      label: 'Settings', 
-      onClick: () => {
-        navigate('/settings');
-        setIsDropdownOpen(false);
-      }
-    },
-    { 
       icon: <FaSignOutAlt />, 
       label: 'Logout', 
       onClick: handleLogoutClick,
@@ -78,7 +70,8 @@ const Header = () => {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-          className="text-xl font-bold text-gray-800"
+          className="text-xl cursor-pointer font-bold text-gray-800"
+          onClick={() => navigate('/')}
         >
           Dashboard
         </motion.div>

@@ -5,6 +5,8 @@ import NotFound from '../components/NotFound';
 import User from '../components/User';
 import Admin from '../components/Admin';
 import SuperAdmin from '../components/SuperAdmin';
+import ProfilePage from '../components/Profile';
+import Header from '../components/Header';
 
 export const privateRoutes = [
   {
@@ -16,26 +18,11 @@ export const privateRoutes = [
     )
   },
   {
-    path: '/user',
+    path: '/profile',
     element: (
-      <ProtectedRoute requiredRoles={['user']}>
-        <User />
-      </ProtectedRoute>
-    )
-  },
-  {
-    path: '/admin',
-    element: (
-      <ProtectedRoute requiredRoles={['admin']}>
-        <Admin />
-      </ProtectedRoute>
-    )
-  },
-  {
-    path: '/superadmin',
-    element: (
-      <ProtectedRoute requiredRoles={['superadmin']}>
-        <SuperAdmin />
+      <ProtectedRoute>
+        <Header />
+        <ProfilePage />
       </ProtectedRoute>
     )
   },

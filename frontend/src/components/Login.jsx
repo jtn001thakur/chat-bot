@@ -67,7 +67,6 @@ export default function LoginPage() {
       const response = await authApi.login(fullPhoneNumber, user.password);
       
       // Store tokens and user info
-      console.log(response.data);
       handleLogin(
         response.data.accessToken, 
         response.data.refreshToken, 
@@ -77,10 +76,19 @@ export default function LoginPage() {
       // Redirect to home or dashboard
       navigate('/');
     } catch (error) {
-      // Handle login errors
+      // Handle specific login errors
       const errorMessage = error.response?.data?.message || "Login failed";
+      
+      // Map specific error messages
+      const errorMap = {
+        "Invalid credentials": "Incorrect phone number or password",
+        "User not found": "No account exists with this phone number",
+        "Account locked": "Too many failed attempts. Please try again later",
+        "default": "Unable to login. Please try again"
+      };
+
       setErrors({ 
-        api: errorMessage 
+        api: errorMap[errorMessage] || errorMap['default']
       });
     } finally {
       setLoading(false);
@@ -162,8 +170,8 @@ export default function LoginPage() {
 
           {/* API Error */}
           {errors.api && (
-            <div className="text-red-500 text-center mb-4">
-              {errors.api}
+            <div className="text-red-500 text-center mb-4 bg-red-50 p-2 rounded-lg">
+              <p className="font-medium">{errors.api}</p>
             </div>
           )}
 
