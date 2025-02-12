@@ -1,0 +1,30 @@
+import mongoose from 'mongoose';
+
+const config = {
+    development: {
+        db: 'mongodb://127.0.0.1:27017/chat_app_dev'
+    },
+    production: {
+        db: process.env.MONGODB_URI
+    },
+    test: {
+        db: 'mongodb://127.0.0.1:27017/chat_app_test'
+    }
+};
+
+const dbConfig = config[process.env.NODE_ENV || 'development'];
+
+export const connectDB = async () => {
+    try {
+        await mongoose.connect(dbConfig.db, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true
+        });
+        console.log('MongoDB connected successfully');
+    } catch (error) {
+        console.error('MongoDB connection error:', error.message);
+        process.exit(1);
+    }
+};
+
+export default dbConfig;
