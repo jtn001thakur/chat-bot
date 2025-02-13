@@ -61,7 +61,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       <Header chatTitle={getHeaderTitle()} />
-      <main className="pt-16 px-4">
+      <main className="pt-16">
         {renderDashboard()}
       </main>
     </div>

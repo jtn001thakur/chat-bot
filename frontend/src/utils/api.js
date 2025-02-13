@@ -1,9 +1,8 @@
 import axios from 'axios';
-import { 
-  getAccessToken, 
-  getRefreshToken, 
-  handleLogin, 
-  handleLogout 
+import {
+  getAccessToken,
+  handleLogin,
+  handleLogout
 } from './localStorageUtils';
 
 // Base URL for your backend API
@@ -15,6 +14,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true // Important for sending cookies and credentials
 });
 
 // Flag to prevent multiple simultaneous refresh attempts
@@ -24,9 +24,14 @@ let refreshSubscribers = [];
 // Add a request interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = getAccessToken();
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+    // Skip adding token for login and registration endpoints
+    const noTokenRequiredPaths = ['/auth/login', '/auth/register', '/auth/check-phone', '/auth/send-registration-otp'];
+
+    if (!noTokenRequiredPaths.some(path => config.url.includes(path))) {
+      const token = getAccessToken();
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
     }
     return config;
   },
@@ -38,6 +43,12 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // Prevent refresh token calls for login and registration
+    const noRefreshPaths = ['/auth/login', '/auth/register'];
+    if (noRefreshPaths.some(path => originalRequest.url.includes(path))) {
+      return Promise.reject(error);
+    }
 
     // If the error status is 401 and there is no originalRequest._retry flag
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -52,13 +63,13 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = getRefreshToken();
-        const response = await api.post('/auth/refresh-token', { refreshToken });
-        
-        const { accessToken, refreshToken: newRefreshToken } = response.data;
-        
-        // Update tokens in local storage
-        handleLogin(accessToken, newRefreshToken);
+        // Refresh token endpoint now relies on HTTP-only cookie
+        const response = await api.post('/auth/refresh-token');
+
+        const { accessToken, user } = response.data;
+
+        // Update tokens and user info
+        handleLogin(accessToken, user);
 
         // Retry original request with new token
         originalRequest.headers['Authorization'] = `Bearer ${accessToken}`;
@@ -79,22 +90,52 @@ api.interceptors.response.use(
 
 // Authentication API methods
 export const authApi = {
-  // Check if phone number exists
+  // Login method
+  login: (phoneNumber, password) => {
+    return api.post('/auth/login', { phoneNumber, password })
+      .then(response => {
+        const { accessToken, user } = response.data;
+        handleLogin(accessToken, user);
+        return response.data;
+      })
+      .catch(error => {
+        // Extract error message from different possible response structures
+        const errorMessage =
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          'Login failed';
+
+        // Throw a structured error for better handling
+        throw {
+          message: errorMessage,
+          status: error.response?.status,
+          originalError: error
+        };
+      });
+  },
+
+  // Logout method
+  logout: () => {
+    return api.post('/auth/logout')
+      .then(() => {
+        handleLogout();
+      });
+  },
+
+  // Other existing methods
   checkPhoneExists: (phoneNumber) => {
     return api.post('/auth/check-phone', { phoneNumber });
   },
 
-  // Send registration OTP
   sendRegistrationOTP: (phoneNumber) => {
     return api.post('/auth/send-registration-otp', { phoneNumber });
   },
 
-  // Send reset password OTP
   sendResetPasswordOTP: (phoneNumber) => {
     return api.post('/auth/send-reset-password-otp', { phoneNumber });
   },
 
-  // Verify OTP
   verifyOTP: (data) => {
     return api.post('/auth/verify-otp', data);
   },
@@ -104,32 +145,14 @@ export const authApi = {
     return api.post('/auth/register', userData);
   },
 
-  // User login
-  login: (phoneNumber, password) => {
-    return api.post('/auth/login', { phoneNumber, password });
-  },
 
-  // Reset password
   resetPassword: (phoneNumber, newPassword) => {
     return api.post('/auth/reset-password', { phoneNumber, newPassword });
   },
 
-  // Refresh token
-  refreshToken: (refreshToken) => {
-    return api.post('/auth/refresh-token', { refreshToken });
-  },
-
-  // Logout method
-  logout: () => {
-    const refreshToken = getRefreshToken();
-    return api.post('/auth/logout', { refreshToken });
-  },
-
-  // Profile retrieval
   getProfile: () => {
-    return api.get('/auth/profile');
+    return api.get('/user/profile');
   }
 };
 
-// Export the configured axios instance
 export default api;

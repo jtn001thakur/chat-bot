@@ -6,16 +6,14 @@ const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_INFO_KEY = 'userInfo';
 
 /**
- * Handle user login by storing access token, refresh token, and user information in localStorage
+ * Handle user login by storing access token and user information in localStorage
  * @param {string} accessToken - Access token
- * @param {string} refreshToken - Refresh token
  * @param {Object} userInfo - User information object
  */
-export const handleLogin = (accessToken, refreshToken, userInfo) => {
+export const handleLogin = (accessToken, userInfo) => {
   try {
     // Store tokens
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 
     // Store user info
     localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));

@@ -129,9 +129,7 @@ const Header = ({
           className="text-xl cursor-pointer font-bold text-gray-800"
           onClick={() => navigate('/')}
         >
-          {userInfo?.role === 'superadmin' ? 'Super Admin Dashboard' : 
-           userInfo?.role === 'admin' ? 'Admin Dashboard' : 
-           'Dashboard'}
+          {chatTitle}
         </motion.div>
 
         {/* User Dropdown */}

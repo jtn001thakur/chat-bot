@@ -86,7 +86,7 @@ export default function RegisterPage() {
       setLoading(true);
       setErrors({});
 
-      const fullPhoneNumber = `${user.countryCode}${sanitizePhoneNumber(user.phoneNumber)}`;
+      const fullPhoneNumber = `${sanitizePhoneNumber(user.phoneNumber)}`;
       
       // Send registration OTP
       const response = await authApi.sendRegistrationOTP(fullPhoneNumber);
@@ -129,7 +129,7 @@ export default function RegisterPage() {
       setLoading(true);
       setErrors({});
 
-      const fullPhoneNumber = `${user.countryCode}${sanitizePhoneNumber(user.phoneNumber)}`;
+      const fullPhoneNumber = `${sanitizePhoneNumber(user.phoneNumber)}`;
       const response = await authApi.verifyOTP({
         phoneNumber: fullPhoneNumber, 
         otp: otpValue, 
@@ -181,7 +181,7 @@ export default function RegisterPage() {
       setLoading(true);
       setErrors({});
 
-      const fullPhoneNumber = `${user.countryCode}${sanitizePhoneNumber(user.phoneNumber)}`;
+      const fullPhoneNumber = `${sanitizePhoneNumber(user.phoneNumber)}`;
       await authApi.register({
         phoneNumber: fullPhoneNumber,
         name: user.name,

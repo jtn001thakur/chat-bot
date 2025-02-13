@@ -1,6 +1,7 @@
 import express from 'express';
 import * as authController from '../controllers/auth.controller.js';
 import auth from '../middleware/auth.js';
+import { sanitizeInput } from '../middleware/sanitize.middleware.js';
 
 const router = express.Router();
 
@@ -8,6 +9,9 @@ const router = express.Router();
 router.get("/", (req, res) => {
     res.send('Hello World!');
 });
+
+// Apply sanitization middleware to all auth routes
+router.use(sanitizeInput);
 
 // Authentication routes
 router.post('/login', authController.login);

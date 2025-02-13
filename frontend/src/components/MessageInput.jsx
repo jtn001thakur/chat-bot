@@ -32,16 +32,29 @@ const getFileDetails = (file) => {
     return 'other';
   };
 
+  const type = getType();
+  const previewUrl = URL.createObjectURL(file);
+
   return {
-    type: getType(),
+    type,
     icon: {
       'image': <FaImage className="text-blue-500" />,
       'video': <FaVideo className="text-green-500" />,
       'document': <FaFileAlt className="text-red-500" />,
       'other': <FaFileAlt className="text-gray-500" />
-    }[getType()],
-    previewUrl: fileType === 'image' ? URL.createObjectURL(file) : null
+    }[type],
+    previewUrl,
+    fileSize: (file.size / (1024 * 1024)).toFixed(2) // Size in MB
   };
+};
+
+// Utility function to truncate filename
+const truncateFilename = (filename, maxLength = 20) => {
+  if (filename.length <= maxLength) return filename;
+  const extension = filename.split('.').pop();
+  const nameWithoutExt = filename.slice(0, filename.lastIndexOf('.'));
+  const truncatedName = nameWithoutExt.slice(0, maxLength - extension.length - 3);
+  return `${truncatedName}...${extension}`;
 };
 
 const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
@@ -51,7 +64,7 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
   const [error, setError] = useState(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
-  const [inputHeight, setInputHeight] = useState(44);
+  const [inputHeight, setInputHeight] = useState(60); // Increased default height
 
   // File details with memoization
   const fileDetails = useMemo(() => getFileDetails(selectedFile), [selectedFile]);
@@ -67,7 +80,7 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
       );
       
       // Update input height
-      setInputHeight(Math.max(newHeight, 44));
+      setInputHeight(Math.max(newHeight + 20, 60)); // Minimum 60px
       textarea.style.height = `${newHeight}px`;
     }
   }, [maxLines]);
@@ -101,7 +114,7 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
       setMessage('');
       setSelectedFile(null);
       setUploadProgress(0);
-      setInputHeight(44); // Reset to single line
+      setInputHeight(60); // Reset to default height
       
       // Reset file input
       if (fileInputRef.current) {
@@ -126,50 +139,6 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
     }
   };
 
-  // Render file preview
-  const renderFilePreview = () => {
-    if (!fileDetails) return null;
-
-    return (
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="absolute top-[-120px] left-0 right-0 bg-white rounded-lg shadow-lg p-2 flex items-center"
-      >
-        {/* File Preview */}
-        {fileDetails.previewUrl ? (
-          <div className="w-20 h-20 mr-3 rounded-lg overflow-hidden">
-            <img 
-              src={fileDetails.previewUrl} 
-              alt="File preview" 
-              className="w-full h-full object-cover"
-            />
-          </div>
-        ) : (
-          <div className="w-12 h-12 mr-3 flex items-center justify-center">
-            {fileDetails.icon}
-          </div>
-        )}
-
-        {/* File Details */}
-        <div className="flex-1">
-          <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-          <p className="text-xs text-gray-500">
-            {(selectedFile.size / 1024).toFixed(2)} KB
-          </p>
-        </div>
-
-        {/* Remove Button */}
-        <button 
-          onClick={handleRemoveFile}
-          className="text-red-500 hover:text-red-700 p-2"
-        >
-          <FaTimes />
-        </button>
-      </motion.div>
-    );
-  };
-
   return (
     <div 
       className="bg-white border-t"
@@ -179,22 +148,81 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
         left: 0,
         right: 0,
         zIndex: 50,
-        padding: 0
+        width: '100%',
+        padding: '8px'
       }}
     >
       {/* File Preview */}
-      <AnimatePresence>
-        {selectedFile && renderFilePreview()}
-        {error && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-100 text-red-700 p-2 rounded-lg mb-2"
-          >
-            {error}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {selectedFile && (
+        <div className="absolute bottom-full left-0 mb-2 w-full">
+          <div className="flex items-center bg-gray-100 rounded-md p-2 max-w-full">
+            <div className="flex items-center flex-1 min-w-0">
+              {/* Preview Section */}
+              {fileDetails.type === 'image' && (
+                <div className="w-12 h-12 mr-2 rounded overflow-hidden flex-shrink-0">
+                  <img
+                    src={fileDetails.previewUrl}
+                    alt={selectedFile.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23999"><path d="M19 2H5C3.9 2 3 2.9 3 4V20C3 21.1 3.9 22 5 22H19C20.1 22 21 21.1 21 20V4C21 2.9 20.1 2 19 2ZM19 20H5V4H19V20ZM12 5.5C10.3 5.5 9 6.8 9 8.5C9 10.2 10.3 11.5 12 11.5C13.7 11.5 15 10.2 15 8.5C15 6.8 13.7 5.5 12 5.5ZM7 18V16L9 14L10 15L13 12L17 16V18H7Z"/></svg>';
+                    }}
+                  />
+                </div>
+              )}
+              {fileDetails.type === 'video' && (
+                <div className="w-12 h-12 mr-2 rounded overflow-hidden flex-shrink-0 bg-black">
+                  <video
+                    src={fileDetails.previewUrl}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-gray-200"><svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg></div>';
+                    }}
+                  />
+                </div>
+              )}
+              {!['image', 'video'].includes(fileDetails.type) && (
+                <div className="w-12 h-12 mr-2 flex-shrink-0 flex items-center justify-center">
+                  {fileDetails.icon}
+                </div>
+              )}
+              
+              {/* File Info */}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-gray-700 truncate">
+                  {truncateFilename(selectedFile.name)}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {fileDetails.fileSize} MB
+                </div>
+              </div>
+            </div>
+
+            {/* Remove Button */}
+            <button
+              onClick={() => {
+                URL.revokeObjectURL(fileDetails.previewUrl);
+                setSelectedFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+              className="ml-2 text-gray-500 hover:text-red-500 transition-colors flex-shrink-0"
+            >
+              <FaTimes />
+            </button>
+          </div>
+        </div>
+      )}
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-100 text-red-700 p-2 rounded-lg mb-2"
+        >
+          {error}
+        </motion.div>
+      )}
 
       {/* Input Container */}
       <div 
@@ -230,7 +258,7 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
             rows={1}
             className="w-full bg-transparent resize-none overflow-hidden outline-none text-left"
             style={{ 
-              height: `${inputHeight - 10}px`,
+              height: `${inputHeight - 20}px`,
               minHeight: '34px',
               maxHeight: `${textareaRef.current?.lineHeight * maxLines}px`
             }}

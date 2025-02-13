@@ -1,48 +1,97 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import User from '../models/user.model.js';
 import Otp from '../models/otp.model.js';
 import Token from '../models/token.model.js';
 import { sendOTPViaSMS } from '../utils/otpUtils.js';
 import { generateTokens, verifyRefreshToken } from '../utils/tokenUtils.js';
+import { v4 as uuidv4 } from "uuid";
 
 export const login = async (req, res) => {
     try {
-        const { phoneNumber, password } = req.body;
+        const { phoneNumber, password } = req.sanitizedBody; // Using sanitized input
         
         // Find user by phone number
-        const user = await User.findOne({ phoneNumber });
+        const user = await User.findOne({ phoneNumber }).select('+password +sessions');
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
         // Check password
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await user.comparePassword(password);
         if (!isMatch) {
+            // Reset login attempts on successful login
+            const clientIp = req.ip || req.connection.remoteAddress;
+            if (global.loginAttempts) {
+                global.loginAttempts.delete(clientIp);
+            }
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // Generate tokens
-        const { accessToken, refreshToken } = generateTokens(user);
+        // Check for maximum sessions (limit to 5 active sessions)
+        const maxSessions = 5;
+        if (user.sessions && user.sessions.length >= maxSessions) {
+            // Remove oldest session
+            user.sessions.sort((a, b) => a.lastActive - b.lastActive);
+            await user.revokeSession(user.sessions[0].deviceId);
+        }
 
-        // Save refresh token to database
-        await Token.create({ 
-          token: refreshToken,
-          user: user._id,
-          isActive: true 
+        // Create new session
+        const sessionId = uuidv4();
+        
+        // Safely extract device info with fallbacks
+        const deviceInfo = req.deviceInfo || {};
+        user.sessions.push({
+            deviceId: sessionId,
+            device: `${deviceInfo.browser || 'Unknown'} on ${deviceInfo.os || 'Unknown'}`,
+            lastActive: new Date(),
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.headers['user-agent'] || 'Unknown'
         });
 
-        res.json({ 
-            accessToken, 
+        await user.save();
+
+        // Generate tokens with session information
+        const { accessToken, refreshToken } = generateTokens(user, sessionId);
+
+        // Create and save refresh token
+        await Token.create({
+            user: user._id,
+            token: refreshToken,
+            deviceId: sessionId,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+        });
+
+        // Prepare user response (exclude sensitive fields)
+        const userResponse = {
+            _id: user._id,
+            phoneNumber: user.phoneNumber,
+            name: user.name,
+            role: user.role
+        };
+
+        // Send response
+        res.status(200).json({
+            message: 'Login successful',
+            accessToken,
             refreshToken,
-            user: { 
-                id: user._id, 
-                phoneNumber: user.phoneNumber, 
-                role: user.role 
-            } 
+            user: userResponse
         });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error('Login error:', error);
+        
+        // Handle Mongoose validation errors
+        if (error.name === 'ValidationError') {
+            const validationErrors = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({ 
+                message: 'Invalid request data', 
+                error: validationErrors.join(', ') 
+            });
+        }
+
+        res.status(500).json({ 
+            message: 'Invalid request data', 
+            error: error.message || 'Unknown error occurred' 
+        });
     }
 };
 
@@ -53,7 +102,7 @@ export const checkPhoneExists = async (req, res) => {
         
         res.json({ exists: !!user });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        res.status(500).json({ message: 'Error checking phone number', error: error.message });
     }
 };
 
@@ -66,7 +115,7 @@ export const sendRegistrationOTP = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ 
                 message: 'Phone number already registered',
-                canLogin: true 
+                error: 'PHONE_NUMBER_EXISTS' 
             });
         }
 
@@ -76,12 +125,9 @@ export const sendRegistrationOTP = async (req, res) => {
         // Send OTP via SMS
         await sendOTPViaSMS(phoneNumber, otpRecord.otp);
 
-        res.json({ 
-            message: 'OTP sent successfully',
-            canRegister: true 
-        });
+        res.status(200).json({ message: 'OTP sent successfully', canRegister: true });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        res.status(500).json({ message: 'Error sending OTP', error: error.message });
     }
 };
 
@@ -94,7 +140,7 @@ export const sendResetPasswordOTP = async (req, res) => {
         if (!user) {
             return res.status(404).json({ 
                 message: 'User not found',
-                canRegister: true 
+                error: 'USER_NOT_FOUND' 
             });
         }
 
@@ -104,9 +150,9 @@ export const sendResetPasswordOTP = async (req, res) => {
         // Send OTP via SMS
         await sendOTPViaSMS(phoneNumber, otpRecord.otp);
 
-        res.json({ message: 'OTP sent successfully' });
+        res.status(200).json({ message: 'OTP sent successfully' });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        res.status(500).json({ message: 'Error sending OTP', error: error.message });
     }
 };
 
@@ -122,18 +168,25 @@ export const verifyOTP = async (req, res) => {
                 return res.status(400).json({ message: 'Invalid or expired OTP' });
             }
 
-            res.json({ 
+            // Mark OTP as verified
+            otpRecord.isVerified = true;
+            await otpRecord.save();
+
+            res.status(200).json({ 
                 message: 'OTP verified successfully',
                 verified: true 
             });
-        } catch (error) {
-            if (error.message === 'Max OTP attempts exceeded') {
-                return res.status(400).json({ message: 'Max OTP attempts exceeded' });
-            }
-            throw error;
+        } catch (verifyError) {
+            return res.status(400).json({ 
+                message: verifyError.message || 'OTP verification failed',
+                verified: false 
+            });
         }
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        res.status(500).json({ 
+            message: 'Error verifying OTP', 
+            error: error.message 
+        });
     }
 };
 
@@ -155,9 +208,11 @@ export const register = async (req, res) => {
         });
 
         if (!otpRecord) {
-            return res.status(403).json({ message: 'OTP not verified' });
+            return res.status(400).json({ 
+                message: 'OTP not verified. Please verify OTP first.',
+                error: 'OTP_NOT_VERIFIED' 
+            });
         }
-
 
         // Create new user
         const newUser = new User({
@@ -178,13 +233,17 @@ export const register = async (req, res) => {
         res.status(201).json({ 
             message: 'User registered successfully',
             user: { 
-                id: newUser._id, 
+                _id: newUser._id, 
                 phoneNumber: newUser.phoneNumber, 
+                name: newUser.name, 
                 role: newUser.role 
-            } 
+            }
         });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        res.status(500).json({ 
+            message: 'Registration failed', 
+            error: error.message 
+        });
     }
 };
 
@@ -206,15 +265,14 @@ export const resetPassword = async (req, res) => {
         });
 
         if (!otpRecord) {
-            return res.status(403).json({ message: 'OTP not verified' });
+            return res.status(400).json({ 
+                message: 'OTP not verified. Please verify OTP first.',
+                error: 'OTP_NOT_VERIFIED' 
+            });
         }
 
-        // Hash new password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
-
         // Update password
-        user.password = hashedPassword;
+        user.password = newPassword;
         await user.save();
 
         // Delete used OTP records
@@ -223,9 +281,12 @@ export const resetPassword = async (req, res) => {
             purpose: 'reset_password' 
         });
 
-        res.json({ message: 'Password reset successfully' });
+        res.status(200).json({ message: 'Password reset successfully' });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        res.status(500).json({ 
+            message: 'Password reset failed', 
+            error: error.message 
+        });
     }
 };
 

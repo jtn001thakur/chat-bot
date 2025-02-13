@@ -42,7 +42,7 @@ const Chat = ({ initialUser }) => {
     // Add message to state
     setMessages(prevMessages => [...prevMessages, messagePayload]);
 
-    // Simulate support response (you'll replace this with actual API call)
+    // Simulate support response
     setTimeout(() => {
       const supportResponse = {
         id: messages.length + 2,

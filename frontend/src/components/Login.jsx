@@ -45,51 +45,44 @@ export default function LoginPage() {
     // Reset previous errors
     setErrors({});
     
-    // Validate phone number
-    if (!validatePhoneNumber(user.phoneNumber)) {
-      setErrors({ phoneNumber: "Invalid phone number format" });
-      return;
-    }
-
-    // Validate password
-    if (user.password.length < 6) {
-      setErrors({ password: "Password must be at least 6 characters" });
-      return;
-    }
-
     try {
       setLoading(true);
+      setErrors({}); // Clear previous errors
+
+      // Validate phone number
+      const cleanPhoneNumber = sanitizePhoneNumber(user.phoneNumber);
+      if (!validatePhoneNumber(cleanPhoneNumber)) {
+        setErrors({ phoneNumber: "Please enter a valid 10-digit phone number starting with 6-9" });
+        setLoading(false);
+        return;
+      }
 
       // Prepare full phone number
-      const fullPhoneNumber = `${user.countryCode}${sanitizePhoneNumber(user.phoneNumber)}`;
+      const fullPhoneNumber = `${cleanPhoneNumber}`;
       
       // Attempt login
-      const response = await authApi.login(fullPhoneNumber, user.password);
-      
-      // Store tokens and user info
-      handleLogin(
-        response.data.accessToken, 
-        response.data.refreshToken, 
-        response.data.user
-      );
+      await authApi.login(fullPhoneNumber, user.password);
 
-      // Redirect to home or dashboard
+      // Redirect to home or dashboard if login is successful
       navigate('/');
     } catch (error) {
       // Handle specific login errors
-      const errorMessage = error.response?.data?.message || "Login failed";
+      const errorMessage = error.message || "Login failed";
       
       // Map specific error messages
       const errorMap = {
         "Invalid credentials": "Incorrect phone number or password",
         "User not found": "No account exists with this phone number",
-        "Account locked": "Too many failed attempts. Please try again later",
-        "default": "Unable to login. Please try again"
+        "Account locked": "Too many failed attempts. Please try again later"
       };
 
+      // Set the error message
       setErrors({ 
-        api: errorMap[errorMessage] || errorMap['default']
+        api: errorMap[errorMessage] || errorMessage || "Unable to login. Please try again"
       });
+
+      // Optional: Log the error for debugging
+      console.error('Login error:', error);
     } finally {
       setLoading(false);
     }
