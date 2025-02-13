@@ -1,22 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   FaUser, 
   FaSignOutAlt, 
-  FaCog, 
+  FaBars,
+  FaTimes,
   FaChevronDown, 
-  FaChevronUp 
+  FaChevronUp,
+  FaComments,
+  FaArrowLeft 
 } from 'react-icons/fa';
 import { getUserInfo, handleLogout } from '../utils/localStorageUtils';
 import { authApi } from '../utils/api';
 import { useConfirmation } from '../contexts/ConfirmationContext';
 
-const Header = () => {
+const Header = ({ 
+  chatMode = false, 
+  chatTitle = 'Support Chat', 
+  onBackClick 
+}) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const confirm = useConfirmation();
   const userInfo = getUserInfo();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   const handleLogoutClick = async () => {
     const confirmed = await confirm({
@@ -27,15 +37,11 @@ const Header = () => {
 
     if (confirmed) {
       try {
-        // Call logout API
         await authApi.logout();
-        
-        // Clear local storage and redirect
         handleLogout();
         navigate('/login');
       } catch (error) {
         console.error('Logout failed:', error);
-        // Force logout even if API call fails
         handleLogout();
         navigate('/login');
       }
@@ -46,6 +52,28 @@ const Header = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
 
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    if (isDropdownOpen || isMobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen, isMobileMenuOpen]);
+
   const menuItems = [
     { 
       icon: <FaUser />, 
@@ -53,6 +81,16 @@ const Header = () => {
       onClick: () => {
         navigate('/profile');
         setIsDropdownOpen(false);
+        setIsMobileMenuOpen(false);
+      }
+    },
+    { 
+      icon: <FaComments />, 
+      label: 'Support Chat', 
+      onClick: () => {
+        navigate('/messages');
+        setIsDropdownOpen(false);
+        setIsMobileMenuOpen(false);
       }
     },
     { 
@@ -63,9 +101,27 @@ const Header = () => {
     }
   ];
 
-  return (
-    <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-md shadow-sm">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+  // Determine header content based on chat mode and user role
+  const renderHeaderContent = () => {
+    if (chatMode) {
+      return (
+        <div className="flex items-center w-full">
+          <button 
+            onClick={onBackClick || (() => navigate(-1))}
+            className="mr-4 text-gray-600 hover:text-blue-500"
+          >
+            <FaArrowLeft size={20} />
+          </button>
+          <div className="flex-1">
+            <h2 className="text-xl font-semibold">{chatTitle}</h2>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {/* Dashboard Logo/Text */}
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -73,29 +129,25 @@ const Header = () => {
           className="text-xl cursor-pointer font-bold text-gray-800"
           onClick={() => navigate('/')}
         >
-          Dashboard
+          {userInfo?.role === 'superadmin' ? 'Super Admin Dashboard' : 
+           userInfo?.role === 'admin' ? 'Admin Dashboard' : 
+           'Dashboard'}
         </motion.div>
 
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-          className="relative"
-        >
-          <button 
+        {/* User Dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <div 
             onClick={toggleDropdown}
-            className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 transition"
+            className="flex items-center cursor-pointer hover:bg-gray-100 p-2 rounded-lg"
           >
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center">
-                {userInfo?.name ? userInfo.name[0].toUpperCase() : 'U'}
-              </div>
-              <span className="font-medium hidden md:inline">
-                {userInfo?.name || 'User'}
-              </span>
+            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-2">
+              <FaUser className="text-white" />
             </div>
+            <span className="font-medium mr-2">
+              {userInfo?.name || 'User'}
+            </span>
             {isDropdownOpen ? <FaChevronUp /> : <FaChevronDown />}
-          </button>
+          </div>
 
           <AnimatePresence>
             {isDropdownOpen && (
@@ -103,24 +155,34 @@ const Header = () => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg overflow-hidden border"
+                className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg"
               >
                 {menuItems.map((item, index) => (
-                  <button
+                  <div 
                     key={index}
                     onClick={item.onClick}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-gray-100 transition 
-                      ${item.className || ''}`}
+                    className={`
+                      flex items-center p-3 cursor-pointer 
+                      hover:bg-gray-100 
+                      ${item.className || ''}
+                    `}
                   >
-                    <span className="text-lg">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </button>
+                    <span className="mr-3">{item.icon}</span>
+                    {item.label}
+                  </div>
                 ))}
               </motion.div>
             )}
           </AnimatePresence>
-        </motion.div>
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-md shadow-sm">
+      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+        {renderHeaderContent()}
       </div>
     </header>
   );
