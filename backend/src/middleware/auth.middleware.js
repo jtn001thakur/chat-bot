@@ -5,25 +5,35 @@ import User from '../models/user.model.js';
 // Middleware to verify access token
 export const verifyToken = async (req, res, next) => {
     try {
-        // Extract token from Authorization header
+        // Extract token from multiple sources
+        let token;
+
+        // 1. Check Authorization header
         const authHeader = req.headers.authorization;
-        if (!authHeader) {
+        if (authHeader) {
+            const parts = authHeader.split(' ');
+            if (parts.length === 2 && parts[0] === 'Bearer') {
+                token = parts[1];
+            }
+        }
+
+        // 2. Check cookies
+        if (!token && req.cookies?.accessToken) {
+            token = req.cookies.accessToken;
+        }
+
+        // 3. Check request body
+        if (!token && req.body?.accessToken) {
+            token = req.body.accessToken;
+        }
+
+        // No token found
+        if (!token) {
             return res.status(401).json({ 
-                message: 'No authorization header provided',
+                message: 'No access token provided',
                 error: 'UNAUTHORIZED' 
             });
         }
-
-        // Split the header and extract token
-        const parts = authHeader.split(' ');
-        if (parts.length !== 2 || parts[0] !== 'Bearer') {
-            return res.status(401).json({ 
-                message: 'Invalid authorization header format',
-                error: 'INVALID_TOKEN_FORMAT' 
-            });
-        }
-
-        const token = parts[1];
 
         // Verify the token
         let decoded;
@@ -50,38 +60,21 @@ export const verifyToken = async (req, res, next) => {
             });
         }
 
-        // Optional: Check if session is still valid
-        if (decoded.sessionId) {
-            const tokenRecord = await Token.findOne({
-                token: token,
-                sessionId: decoded.sessionId,
-                isActive: true
-            });
-
-            if (!tokenRecord) {
-                return res.status(401).json({ 
-                    message: 'Session is no longer valid',
-                    error: 'SESSION_INVALIDATED' 
-                });
-            }
-        }
-
-        // Check if user still exists
+        // Find user
         const user = await User.findById(decoded.userId);
         if (!user) {
             return res.status(401).json({ 
-                message: 'User no longer exists',
+                message: 'User not found',
                 error: 'USER_NOT_FOUND' 
             });
         }
 
-        // Attach user and decoded token info to request
+        // Attach user to request
         req.user = {
             id: user._id,
             role: user.role,
             phoneNumber: user.phoneNumber
         };
-        req.tokenInfo = decoded;
 
         next();
     } catch (error) {
@@ -93,27 +86,9 @@ export const verifyToken = async (req, res, next) => {
     }
 };
 
-// Middleware to check user role
-export const checkRole = (allowedRoles) => {
-    return (req, res, next) => {
-        // Ensure user and role exist
-        if (!req.user || !req.user.role) {
-            return res.status(403).json({ 
-                message: 'Access denied',
-                error: 'NO_USER_ROLE' 
-            });
-        }
-
-        // Check if user's role is in the allowed roles
-        if (!allowedRoles.includes(req.user.role)) {
-            return res.status(403).json({ 
-                message: 'Insufficient permissions',
-                error: 'INSUFFICIENT_PERMISSIONS' 
-            });
-        }
-
-        next();
-    };
+// Create a middleware function that can be used directly
+const auth = (req, res, next) => {
+    return verifyToken(req, res, next);
 };
 
-export default verifyToken;
+export default auth;

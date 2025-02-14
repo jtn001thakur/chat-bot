@@ -1,103 +1,166 @@
-import Chat from '../models/chat.model.js';
+import Message from '../models/message.model.js';
 import User from '../models/user.model.js';
-import Application from '../models/application.model.js';
 
-exports.sendMessage = async (req, res) => {
+export const sendMessage = async (req, res) => {
   try {
-    const { receiver, message, application } = req.body;
-
-    // Validate receiver exists
-    const receiverUser = await User.findById(receiver);
-    if (!receiverUser) {
-      return res.status(404).json({ message: 'Receiver not found' });
-    }
-
-    // Validate application if provided (for admin)
-    let applicationDoc = null;
-    if (application && req.user.role !== 'superadmin') {
-      applicationDoc = await Application.findById(application);
-      if (!applicationDoc) {
-        return res.status(404).json({ message: 'Application not found' });
-      }
-    }
-
-    // Role-based message sending
-    const newChat = new Chat({
-      sender: req.user._id,
+    const {
       receiver,
       message,
-      senderRole: req.user.role,
-      application: applicationDoc ? applicationDoc._id : null
+      application,
+      metadata,
+      role,
+      phoneNumber
+    } = req.body;
+
+    console.log("Received message payload:", {
+      message,
+      receiver,
+      application,
+      metadata,
+      role,
+      phoneNumber
     });
 
-    await newChat.save();
+    let receiverIds = [];
+    let sender = null;
+
+    if (role === 'user') {
+      // For external/mobile app users
+      // Find admins and superadmins for the specific application
+      const adminUsers = await User.find({
+        $or: [
+          { role: 'admin', applications: { $in: [application] } },
+          { role: 'superadmin' }
+        ]
+      }).select('_id');
+
+      receiverIds = adminUsers.map(user => user._id);
+      
+      // Create sender details for external user
+      sender = {
+        _id: `${application}:${phoneNumber}`
+      };
+    } else if (role === 'admin' || role === 'superadmin') {
+      // Existing admin/superadmin logic
+      const receiverUser = await User.findOne({ 
+        $or: [
+          { _id: receiver },
+          { combinedId: receiver }
+        ]
+      });
+      
+      if (!receiverUser) {
+        return res.status(404).json({ message: 'Receiver not found' });
+      }
+      
+      receiverIds = [receiverUser._id];
+    }
+
+    const newMessage = new Message({
+      // Optional sender details
+      sender: sender ? sender._id : null,
+      externalSenderId: role === 'user' ? `${application}:${phoneNumber}` : null,
+
+      // Receivers
+      receivers: receiverIds,
+
+      // Message content
+      message: message,
+      content: message,  // Duplicate for backward compatibility
+
+      // Sender details
+      senderRole: role || 'external',
+
+      // Application details
+      application: application,
+
+      // Metadata
+      metadata: metadata || {}
+    });
+
+    await newMessage.save();
 
     res.status(201).json({
       message: 'Message sent successfully',
-      chat: newChat
+      chatMessages: [newMessage]
     });
   } catch (error) {
-    res.status(500).json({ 
-      message: 'Error sending message', 
-      error: error.message 
+    console.error('Error in sendMessage:', error);
+    res.status(500).json({
+      message: 'Failed to send message',
+      error: error.message,
+      details: error.errors || {}
     });
   }
 };
 
-exports.getMessages = async (req, res) => {
+export const getMessages = async (req, res) => {
   try {
-    let query = {};
+    const {
+      application,
+      limit,
+      skip,
+      role,
+      phoneNumber
+    } = req.body;
+    
+    // For user role, create a unique userId
+    const userId = role === 'user' ? `${application}:${phoneNumber}` : null;
+    
+    console.log("getMessages body ", req.body);
 
-    // User can only see their own messages
-    if (req.user.role === 'user') {
-      query = {
-        $or: [
-          { sender: req.user._id },
-          { receiver: req.user._id }
-        ]
-      };
-    } 
-    // Admin can see messages for their specific applications
-    else if (req.user.role === 'admin') {
-      const adminApplications = await Application.find({ admin: req.user._id }).select('_id');
-      const applicationIds = adminApplications.map(app => app._id);
-
-      query = {
-        $or: [
-          { 
-            sender: req.user._id,
-            application: { $in: applicationIds }
-          },
-          { 
-            receiver: req.user._id,
-            application: { $in: applicationIds }
-          }
-        ]
-      };
+    // Validate required parameters
+    if (!application) {
+      return res.status(400).json({
+        message: 'Application is required'
+      });
     }
-    // Superadmin can see all messages
-    // No additional query needed for superadmin
 
-    const messages = await Chat.find(query)
-      .populate('sender', 'name email')
-      .populate('receiver', 'name email')
-      .populate('application', 'name')
-      .sort({ createdAt: -1 });
+    const query = {
+      application: application
+    };
 
-    // Mark messages as read for the current user
-    await Chat.updateMany(
-      { 
-        receiver: req.user._id, 
-        isRead: false 
-      }, 
-      { isRead: true }
-    );
+    // If not a superadmin, filter messages
+    if (role !== 'superadmin') {
+      query.$or = [
+        // Messages where user is a receiver
+        { receivers: userId },
 
-    res.status(200).json(messages);
+        // Messages from the user
+        { sender: userId },
+
+        // Messages for admin/superadmin in their applications
+        ...(role === 'admin' ? [
+          {
+            senderRole: 'user',
+            application: application
+          }
+        ] : [])
+      ];
+    }
+
+    // Fetch messages
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip || 0)
+      .limit(limit || 50)
+      .populate('sender', 'name')
+      .populate('receivers', 'name');
+
+    // Count total messages
+    const total = await Message.countDocuments(query);
+
+    res.status(200).json({
+      messages: messages,
+      total: total,
+      userDetails: null  // You can populate this if needed
+    });
   } catch (error) {
-    res.status(500).json({ 
-      message: 'Error retrieving messages', 
-      error: error.message 
+    console.error('Error retrieving messages:', error);
+    res.status(500).json({
+      message: 'Error retrieving messages',
+      error: error.message,
+      details: error.toString()
     });
   }
 };

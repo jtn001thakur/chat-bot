@@ -4,7 +4,10 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/server.js",
+    "kill-node": "powershell -ExecutionPolicy Bypass -File kill-node.ps1",
+    "kill-port": "powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force\"",
+    "pre-dev": "npm run kill-node && npm run kill-port",
+    "dev": "nodemon --trace-warnings src/server.js",
     "start": "node src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -14,6 +17,7 @@
   "description": "",
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

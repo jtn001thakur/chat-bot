@@ -2,6 +2,7 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import parseDeviceInfo from './middleware/deviceInfo.middleware.js';
@@ -39,6 +40,7 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(cookieParser()); 
 app.use(morgan('dev'));
 app.use(parseDeviceInfo); 
 
@@ -49,7 +51,10 @@ app.use('/api/chat', chatRoutes);
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
-    res.status(500).json({ message: 'Something went wrong!' });
+    res.status(500).json({
+        message: 'Something went wrong!',
+        error: process.env.NODE_ENV === 'production' ? {} : err.stack
+    });
 });
 
 export default app;

@@ -34,6 +34,11 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin", "superadmin"],
       default: "user",
     },
+    combinedId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     sessions: [
       {
         deviceId: {
@@ -57,6 +62,9 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Ensure unique index on combinedId
+userSchema.index({ combinedId: 1 }, { unique: true, sparse: true });
 
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();

@@ -1,10 +1,10 @@
-import bcrypt from 'bcryptjs';
 import User from '../models/user.model.js';
 import Otp from '../models/otp.model.js';
 import Token from '../models/token.model.js';
 import { sendOTPViaSMS } from '../utils/otpUtils.js';
-import { generateTokens, verifyRefreshToken } from '../utils/tokenUtils.js';
+import { generateTokens } from '../utils/tokenUtils.js';
 import { v4 as uuidv4 } from "uuid";
+import jwt from 'jsonwebtoken';
 
 export const login = async (req, res) => {
     try {
@@ -68,6 +68,21 @@ export const login = async (req, res) => {
             name: user.name,
             role: user.role
         };
+
+        // Set tokens as HTTP-only cookies
+        res.cookie('accessToken', accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', 
+            sameSite: 'strict',
+            maxAge: 15 * 60 * 1000 // 15 minutes
+        });
+
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', 
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
 
         // Send response
         res.status(200).json({
@@ -292,35 +307,82 @@ export const resetPassword = async (req, res) => {
 
 export const refreshToken = async (req, res) => {
     try {
-        const { refreshToken } = req.body;
-        
+       
+
+        // Get refresh token from multiple sources
+        const refreshToken = req.cookies?.refreshToken || req.header("Authorization")?.replace("Bearer ", "")
+        console.log('Refresh Token:', refreshToken);
+        // If no refresh token found, return unauthorized
+        if (!refreshToken) {
+            console.warn('No refresh token found in request');
+            return res.status(401).json({ 
+                message: 'No refresh token found',
+                error: 'UNAUTHORIZED' 
+            });
+        }
+
         // Verify refresh token
-        const decoded = verifyRefreshToken(refreshToken);
+        let decoded;
+        try { 
+            decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET)
+        } catch (verifyError) {
+            console.error('Refresh token verification failed:', verifyError);
+            // Clear the invalid cookie
+            res.clearCookie('refreshToken');
+            return res.status(401).json({ 
+                message: 'Invalid or expired refresh token',
+                error: 'TOKEN_EXPIRED' 
+            });
+        }
         
         // Find user
         const user = await User.findById(decoded.userId);
         if (!user) {
-            return res.status(401).json({ message: 'Invalid token' });
+            // Clear the cookie if user not found
+            res.clearCookie('refreshToken');
+            return res.status(401).json({ 
+                message: 'User not found',
+                error: 'USER_NOT_FOUND' 
+            });
         }
 
-        // Generate new access token
+        // Generate new tokens
         const { accessToken, newRefreshToken } = generateTokens(user);
 
         // Update refresh token in database
         await Token.findOneAndUpdate({ 
-          token: refreshToken,
-          user: user._id 
+            token: refreshToken,
+            user: user._id 
         }, { 
-          token: newRefreshToken,
-          isActive: true 
+            token: newRefreshToken,
+            isActive: true 
         });
 
+        // Set new refresh token as HTTP-only cookie
+        res.cookie('refreshToken', newRefreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // use secure in production
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        // Return new access token
         res.json({ 
-            accessToken, 
-            refreshToken: newRefreshToken 
+            accessToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                phoneNumber: user.phoneNumber,
+                role: user.role
+            }
         });
     } catch (error) {
-        res.status(401).json({ message: 'Invalid or expired token' });
+        console.error('Refresh token error:', error);
+        res.clearCookie('refreshToken');
+        res.status(401).json({ 
+            message: 'Token refresh failed',
+            error: 'REFRESH_FAILED' 
+        });
     }
 };
 
@@ -338,30 +400,97 @@ export const getProfile = async (req, res) => {
 
 export const logout = async (req, res) => {
     try {
-        const { refreshToken } = req.body;
+        // Try to get refresh token from request body or cookies
+        const refreshToken = req.body.refreshToken || req.cookies.refreshToken;
         
-        // Remove refresh token from database
-        await Token.findOneAndDelete({ 
-          token: refreshToken,
-          user: req.user.id 
-        });
+        // If no user context (e.g., token expired), attempt logout based on refresh token
+        if (!req.user) {
+            if (!refreshToken) {
+                return res.status(200).json({ 
+                    message: 'No active session found. Already logged out.',
+                    logoutType: 'FORCE_LOGOUT'
+                });
+            }
+
+            // Try to find and invalidate the token even if user context is lost
+            const existingToken = await Token.findOne({ token: refreshToken });
+            if (existingToken) {
+                await Token.findByIdAndUpdate(existingToken._id, { 
+                    isActive: false, 
+                    logoutTimestamp: new Date() 
+                });
+            }
+
+            return res.status(200).json({ 
+                message: 'Session invalidated successfully',
+                logoutType: 'TOKEN_INVALIDATION'
+            });
+        }
+
+        // Normal logout flow with user context
+        if (refreshToken) {
+            // Remove specific refresh token
+            await Token.findOneAndDelete({ 
+                token: refreshToken,
+                user: req.user.id 
+            });
+        }
 
         // Check and limit active logins
         const activeTokens = await Token.find({ 
-          user: req.user.id,
-          isActive: true 
+            user: req.user.id,
+            isActive: true 
         });
 
         // If more than 5 active tokens, remove the oldest ones
         if (activeTokens.length > 5) {
-            const tokensToRemove = activeTokens.slice(0, activeTokens.length - 5);
+            const tokensToRemove = activeTokens
+                .sort((a, b) => a.createdAt - b.createdAt)
+                .slice(0, activeTokens.length - 5);
+            
             await Token.deleteMany({ 
-              _id: { $in: tokensToRemove.map(token => token._id) } 
+                _id: { $in: tokensToRemove.map(token => token._id) } 
             });
         }
 
-        res.status(200).json({ message: 'Logged out successfully' });
+        // Invalidate all tokens for this user
+        await Token.updateMany(
+            { user: req.user.id },
+            { 
+                isActive: false, 
+                logoutTimestamp: new Date() 
+            }
+        );
+
+        // Clear cookies
+        res.clearCookie('accessToken');
+        res.clearCookie('refreshToken');
+
+        res.status(200).json({ 
+            message: 'Logged out successfully',
+            logoutType: 'FULL_LOGOUT'
+        });
     } catch (error) {
-        res.status(500).json({ message: 'Logout failed', error: error.message });
+        console.error('Logout error:', error);
+        
+        // Handle specific error scenarios
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ 
+                message: 'Invalid token',
+                error: 'INVALID_TOKEN' 
+            });
+        }
+
+        if (error.name === 'TokenExpiredError') {
+            return res.status(200).json({ 
+                message: 'Session expired. Logged out.',
+                logoutType: 'EXPIRED_SESSION'
+            });
+        }
+
+        res.status(500).json({ 
+            message: 'Logout failed', 
+            error: error.message 
+        });
     }
 };

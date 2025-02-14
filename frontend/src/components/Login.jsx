@@ -15,8 +15,8 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState({
     countryCode: '+91',
-    phoneNumber: "",
-    password: ""
+    phoneNumber: "9999999999",
+    password: "Admin@123"
   });
   const [showPassword, setShowPassword] = useState(false);
   const [buttonDisabled, setButtonDisabled] = useState(true);

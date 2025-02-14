@@ -7,7 +7,7 @@ export const generateTokens = (user) => {
       role: user.role 
     }, 
     process.env.JWT_SECRET, 
-    { expiresIn: '15m' }
+    { expiresIn: '2h' }  // Extended from 15m to 2 hours
   );
 
   const refreshToken = jwt.sign(
@@ -19,12 +19,4 @@ export const generateTokens = (user) => {
   );
 
   return { accessToken, refreshToken };
-};
-
-export const verifyRefreshToken = (token) => {
-  try {
-    return jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
-  } catch (error) {
-    throw new Error('Invalid or expired refresh token');
-  }
 };

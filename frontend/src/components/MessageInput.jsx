@@ -57,7 +57,7 @@ const truncateFilename = (filename, maxLength = 20) => {
   return `${truncatedName}...${extension}`;
 };
 
-const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
+const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6, disabled = false }) => {
   const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -87,6 +87,8 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
 
   // Handle file selection
   const handleFileSelect = (event) => {
+    if (disabled) return;
+
     const file = event.target.files[0];
     if (file) {
       // Validate file size (max 10MB)
@@ -101,6 +103,8 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
 
   // Send message logic
   const handleSendMessage = () => {
+    if (disabled) return;
+
     // Only send if message is not empty or file is selected
     const isValidMessage = message.trim().length > 0 || selectedFile;
     
@@ -208,6 +212,7 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
                 if (fileInputRef.current) fileInputRef.current.value = '';
               }}
               className="ml-2 text-gray-500 hover:text-red-500 transition-colors flex-shrink-0"
+              disabled={disabled}
             >
               <FaTimes />
             </button>
@@ -233,6 +238,7 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
         <label 
           htmlFor="file-upload" 
           className="cursor-pointer text-gray-500 hover:text-blue-500 p-2"
+          disabled={disabled}
         >
           <input 
             type="file" 
@@ -241,6 +247,7 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
             onChange={handleFileSelect}
             className="hidden"
             accept="image/*,video/*,application/pdf,.doc,.docx"
+            disabled={disabled}
           />
           <FaPaperclip size={24} />
         </label>
@@ -256,12 +263,13 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
             }}
             placeholder="Message"
             rows={1}
-            className="w-full bg-transparent resize-none overflow-hidden outline-none text-left"
+            className={`w-full bg-transparent resize-none overflow-hidden outline-none text-left ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             style={{ 
               height: `${inputHeight - 20}px`,
               minHeight: '34px',
               maxHeight: `${textareaRef.current?.lineHeight * maxLines}px`
             }}
+            disabled={disabled}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.shiftKey) {
                 e.preventDefault();
@@ -281,7 +289,7 @@ const MessageInput = ({ onSendMessage, replyMessage, maxLines = 6 }) => {
         {/* Send Button */}
         <button 
           onClick={handleSendMessage}
-          disabled={!message.trim() && !selectedFile}
+          disabled={!message.trim() && !selectedFile || disabled}
           className={`
             p-2 rounded-full w-10 h-10 flex items-center justify-center
             ${(message.trim() || selectedFile) 

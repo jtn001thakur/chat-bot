@@ -2,7 +2,6 @@
 
 // Local storage keys
 const ACCESS_TOKEN_KEY = 'accessToken';
-const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_INFO_KEY = 'userInfo';
 
 /**
@@ -12,7 +11,7 @@ const USER_INFO_KEY = 'userInfo';
  */
 export const handleLogin = (accessToken, userInfo) => {
   try {
-    // Store tokens
+    // Store access token
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
 
     // Store user info
@@ -26,15 +25,12 @@ export const handleLogin = (accessToken, userInfo) => {
 };
 
 /**
- * Handle user logout by removing access token, refresh token, and user information from localStorage
+ * Handle user logout by removing access token and user information from localStorage
  */
 export const handleLogout = () => {
   try {
-    // Remove tokens
+    // Remove tokens and user info
     localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-
-    // Remove user info
     localStorage.removeItem(USER_INFO_KEY);
 
     // Dispatch custom event for authentication state change
@@ -49,24 +45,26 @@ export const handleLogout = () => {
  * @returns {string|null} Access token or null
  */
 export const getAccessToken = () => {
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+  try {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  } catch (error) {
+    console.error('Error retrieving access token:', error);
+    return null;
+  }
 };
 
 /**
- * Get refresh token from localStorage
- * @returns {string|null} Refresh token or null
- */
-export const getRefreshToken = () => {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-};
-
-/**
- * Get user information from localStorage
- * @returns {Object|null} User information object or null
+ * Get user info from localStorage
+ * @returns {Object|null} User info object or null
  */
 export const getUserInfo = () => {
-  const userInfoString = localStorage.getItem(USER_INFO_KEY);
-  return userInfoString ? JSON.parse(userInfoString) : null;
+  try {
+    const userInfoString = localStorage.getItem(USER_INFO_KEY);
+    return userInfoString ? JSON.parse(userInfoString) : null;
+  } catch (error) {
+    console.error('Error retrieving user info:', error);
+    return null;
+  }
 };
 
 /**

@@ -45,7 +45,7 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     // Prevent refresh token calls for login and registration
-    const noRefreshPaths = ['/auth/login', '/auth/register'];
+    const noRefreshPaths = ['/auth/login', '/auth/register', '/auth/logout'];
     if (noRefreshPaths.some(path => originalRequest.url.includes(path))) {
       return Promise.reject(error);
     }
@@ -63,8 +63,11 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Refresh token endpoint now relies on HTTP-only cookie
-        const response = await api.post('/auth/refresh-token');
+        // Attempt to refresh token
+        const response = await api.post('/auth/refresh-token', {
+          // Include any additional context if needed
+          context: 'token_refresh'
+        });
 
         const { accessToken, user } = response.data;
 
@@ -99,27 +102,39 @@ export const authApi = {
         return response.data;
       })
       .catch(error => {
-        // Extract error message from different possible response structures
-        const errorMessage =
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          'Login failed';
-
-        // Throw a structured error for better handling
-        throw {
-          message: errorMessage,
-          status: error.response?.status,
-          originalError: error
-        };
+        console.error('Login error:', error.response?.data || error.message);
+        throw error;
       });
   },
 
-  // Logout method
+  // Logout method with improved error handling
   logout: () => {
     return api.post('/auth/logout')
-      .then(() => {
+      .then(response => {
+        // Clear local storage and reset application state
         handleLogout();
+        return response.data;
+      })
+      .catch(error => {
+        // Handle various logout scenarios
+        const errorResponse = error.response?.data;
+        
+        // If token is expired or invalid, force logout
+        if (errorResponse?.error === 'TOKEN_EXPIRED' || 
+            errorResponse?.error === 'INVALID_TOKEN') {
+          handleLogout();
+          return { 
+            message: 'Logged out successfully', 
+            logoutType: 'FORCE_LOGOUT' 
+          };
+        }
+
+        console.error('Logout error:', errorResponse || error.message);
+        throw error;
+      })
+      .finally(() => {
+        // Always redirect to login after logout attempt
+        window.location.href = '/login';
       });
   },
 
@@ -152,6 +167,38 @@ export const authApi = {
 
   getProfile: () => {
     return api.get('/user/profile');
+  }
+};
+
+// Chat API methods
+export const chatApi = {
+  // Send a message
+  sendMessage: (messageData) => {
+    return api.post('/chat/send-message', messageData)
+      .then(response => response.data)
+      .catch(error => {
+        console.error('Failed to send message:', error.response?.data || error.message);
+        throw error;
+      });
+  },
+
+  // Get messages
+  getMessages: (messagePayload) => {
+    return api.post('/chat/messages', messagePayload)
+      .then(response => {
+        // Transform backend messages to frontend format
+        return response.data.messages.map(msg => ({
+          id: msg._id,
+          content: msg.message || msg.content,
+          sender: msg.senderRole === 'user' ? 'user' : 'support',
+          timestamp: msg.createdAt,
+          mediaUrl: msg.metadata?.mediaFile || null
+        }));
+      })
+      .catch(error => {
+        console.error('Failed to fetch messages:', error.response?.data || error.message);
+        throw error;
+      });
   }
 };
 

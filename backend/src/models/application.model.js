@@ -41,4 +41,4 @@ applicationSchema.pre('save', function(next) {
 });
 
 const Application = mongoose.model('Application', applicationSchema);
-module.exports = Application;
+export default Application;

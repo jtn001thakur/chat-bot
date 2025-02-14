@@ -16,10 +16,7 @@ const dbConfig = config[process.env.NODE_ENV || 'development'];
 
 export const connectDB = async () => {
     try {
-        await mongoose.connect(dbConfig.db, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true
-        });
+        await mongoose.connect(dbConfig.db);
         console.log('MongoDB connected successfully');
     } catch (error) {
         console.error('MongoDB connection error:', error.message);

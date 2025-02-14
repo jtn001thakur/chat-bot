@@ -1,19 +1,16 @@
 import express from 'express';
-import chatController from '../controllers/chat.controller.js';
-import authMiddleware from '../middleware/auth.middleware.js';
+import * as chatController from '../controllers/chat.controller.js';
 
 const router = express.Router();
 
 // Route to send a message
-router.post('/send', 
-  authMiddleware.protect, 
+router.post('/send-message', 
   chatController.sendMessage
 );
 
 // Route to get messages
-router.get('/messages', 
-  authMiddleware.protect, 
+router.post('/messages', 
   chatController.getMessages
 );
 
-module.exports = router;
+export default router;

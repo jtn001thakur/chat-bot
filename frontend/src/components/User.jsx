@@ -12,7 +12,9 @@ function User() {
         initialUser={{
           id: userInfo?.id,
           name: userInfo?.name || 'User',
-          phoneNumber: userInfo?.phoneNumber
+          phoneNumber: userInfo?.phoneNumber,
+          application: 'winkey',
+          role: userInfo?.role || 'user'
         }} 
       />
     </div>
