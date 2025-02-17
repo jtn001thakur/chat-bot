@@ -97,9 +97,9 @@ export const authApi = {
   login: (phoneNumber, password) => {
     return api.post('/auth/login', { phoneNumber, password })
       .then(response => {
-        const { accessToken, user } = response.data;
+        const { accessToken, user } = response.data || response;
         handleLogin(accessToken, user);
-        return response.data;
+        return { data: { accessToken, user } };
       })
       .catch(error => {
         console.error('Login error:', error.response?.data || error.message);
@@ -136,6 +136,31 @@ export const authApi = {
         // Always redirect to login after logout attempt
         window.location.href = '/login';
       });
+  },
+
+  // Add method for admin login
+  adminLogin: async (loginData) => {
+    try {
+      const response = await api.post('/auth/admin-login', {
+        applicationName: loginData.applicationName,
+        phoneNumber: loginData.phoneNumber,
+        password: loginData.password
+      });
+
+      return response.data;
+    } catch (error) {
+      // Standardize error handling
+      const errorMessage = 
+        error.response?.data?.message || 
+        error.message || 
+        'Admin login failed';
+
+      // Log the error for debugging
+      console.error('Admin Login Error:', error);
+
+      // Throw a standardized error
+      throw new Error(errorMessage);
+    }
   },
 
   // Other existing methods

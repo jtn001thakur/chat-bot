@@ -17,75 +17,89 @@ const checkSuperAdminRole = (req, res, next) => {
 // Application Management
 export const createApplication = async (req, res) => {
   try {
-    // Ensure only superadmin can create applications
-    if (req.user.role !== 'superadmin') {
-      return res.status(403).json({ 
-        message: 'Access denied. Superadmin role required.',
-        error: 'FORBIDDEN' 
-      });
-    }
+    // First check superadmin role
+    checkSuperAdminRole(req, res, async () => {
+      const { name } = req.body;
 
-    const { name } = req.body;
-
-    // Validate input
-    if (!name || name.trim() === '') {
-      return res.status(400).json({ 
-        message: 'Application name is required',
-        error: 'INVALID_INPUT' 
-      });
-    }
-
-    // Trim and lowercase the name to ensure consistency
-    const normalizedName = name.trim().toLowerCase();
-
-    try {
-      // Debugging: Log user information
-      console.log('User creating application:', {
-        userId: req.user.id,
-        userRole: req.user.role,
-        userName: req.user.phoneNumber
-      });
-
-      // Create new application
-      const newApplication = new Application({
-        name: normalizedName,
-        createdBy: req.user.id,
-        status: 'active',
-        admins: [req.user.id]  
-      });
-
-      // Debugging: Log application before saving
-      console.log('New Application Object:', {
-        name: newApplication.name,
-        createdBy: newApplication.createdBy,
-        status: newApplication.status
-      });
-
-      await newApplication.save();
-
-      res.status(201).json({
-        _id: newApplication._id,
-        name: newApplication.name,
-        status: newApplication.status,
-        createdAt: newApplication.createdAt
-      });
-    } catch (saveError) {
-      // Handle mongoose validation errors
-      if (saveError.name === 'ValidationError') {
-        return res.status(400).json({ 
-          message: saveError.message,
-          error: 'VALIDATION_ERROR' 
+      // Validate input
+      if (!name) {
+        return res.status(400).json({
+          message: 'Application name is required',
+          error: 'INVALID_INPUT'
         });
       }
 
-      throw saveError;  // Re-throw other errors
-    }
+      // Check if user exists and is authenticated
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+          error: 'UNAUTHORIZED'
+        });
+      }
+
+      // Find the user creating the application
+      const user = await User.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({
+          message: 'User not found',
+          error: 'USER_NOT_FOUND'
+        });
+      }
+
+      // Prepare application data
+      const applicationData = {
+        name,
+        createdBy: user._id,
+        admins: [{
+          userId: user._id,
+          name: user.name,
+          phoneNumber: user.phoneNumber,
+          customId: `${name.toLowerCase().replace(/\s+/g, '')}1${user.phoneNumber.slice(-4)}`
+        }]
+      };
+
+      // Create new application
+      const application = new Application(applicationData);
+
+      // Save the application
+      await application.save();
+
+      // Prepare response
+      res.status(201).json({
+        message: 'Application created successfully',
+        application: {
+          _id: application._id,
+          name: application.name,
+          status: application.status,
+          createdBy: {
+            _id: user._id,
+            name: user.name,
+            phoneNumber: user.phoneNumber
+          },
+          admins: [{
+            _id: user._id,
+            name: user.name,
+            phoneNumber: user.phoneNumber,
+            customId: applicationData.admins[0].customId
+          }]
+        }
+      });
+    });
   } catch (error) {
     console.error('Create Application Error:', error);
+    
+    // Handle specific mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        message: 'Application validation failed',
+        errors: validationErrors
+      });
+    }
+
     res.status(500).json({ 
       message: 'Failed to create application',
-      error: 'SERVER_ERROR',
-      details: error.message
+      error: 'SERVER_ERROR' 
     });
   }
 };
@@ -211,22 +225,17 @@ export const getApplicationManagementDetails = async (req, res) => {
 export const addApplicationAdmin = async (req, res) => {
   try {
     const { id } = req.params;
-    const { phoneNumber } = req.body;
+    const { 
+      AdminId, 
+      applicationName, 
+      password 
+    } = req.body;
 
     // Validate input
-    if (!phoneNumber) {
+    if (!AdminId || !applicationName || !password) {
       return res.status(400).json({
-        message: 'Phone number is required',
+        message: 'Admin ID, application name, and password are required',
         error: 'INVALID_INPUT'
-      });
-    }
-
-    // Find user by phone number
-    const user = await User.findOne({ phoneNumber });
-    if (!user) {
-      return res.status(404).json({
-        message: 'User not found',
-        error: 'USER_NOT_FOUND'
       });
     }
 
@@ -235,28 +244,56 @@ export const addApplicationAdmin = async (req, res) => {
     if (!application) {
       return res.status(404).json({
         message: 'Application not found',
-        error: 'NOT_FOUND'
+        error: 'APPLICATION_NOT_FOUND'
       });
     }
 
-    // Check if user is already an admin
-    if (application.admins.includes(user._id)) {
+    // Check if admin already exists in this application
+    const existingAdmin = application.admins.find(
+      admin => admin.phoneNumber === phoneNumber
+    );
+    if (existingAdmin) {
       return res.status(400).json({
-        message: 'User is already an admin of this application',
-        error: 'ALREADY_ADMIN'
+        message: 'Admin with this phone number already exists in the application',
+        error: 'ADMIN_ALREADY_EXISTS'
       });
     }
+
+    // Create or find user
+    let user = await User.findOne({ phoneNumber });
+    if (!user) {
+      // Create new user if not exists
+      user = new User({
+        name,
+        phoneNumber,
+        password,
+        role: 'admin'
+      });
+      await user.save();
+    }
+
+    // Generate custom ID
+    const customId = `${application.name.toLowerCase().replace(/\s+/g, '')}${application.admins.length + 1}${phoneNumber.slice(-4)}`;
+
+    // Prepare new admin data
+    const newAdmin = {
+      userId: user._id,
+      customId,
+      name: user.name,
+      phoneNumber: user.phoneNumber,
+      isActive: true
+    };
 
     // Add user to admins
-    application.admins.push(user._id);
+    application.admins.push(newAdmin);
     await application.save();
 
     res.status(200).json({
       message: 'Admin added successfully',
       admin: {
-        _id: user._id,
-        name: user.name,
-        phoneNumber: user.phoneNumber
+        customId: newAdmin.customId,
+        name: newAdmin.name,
+        phoneNumber: newAdmin.phoneNumber
       }
     });
   } catch (error) {

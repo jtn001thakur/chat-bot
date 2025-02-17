@@ -328,7 +328,7 @@ const ApplicationManagement = () => {
                 {applicationDetails.admins && applicationDetails.admins.length > 0 ? (
                   applicationDetails.admins.map((admin, index) => (
                     <motion.div 
-                      key={admin._id} 
+                      key={admin.customId} 
                       className="flex justify-between items-center border-b last:border-b-0 py-3 border-gray-200"
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -341,6 +341,9 @@ const ApplicationManagement = () => {
                         </p>
                         <p className="text-gray-600 text-sm">
                           {admin.name || 'N/A'}
+                        </p>
+                        <p className="text-gray-500 text-xs">
+                          {admin.phoneNumber || 'N/A'}
                         </p>
                       </div>
                     </motion.div>

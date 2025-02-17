@@ -5,26 +5,32 @@ import { sendOTPViaSMS } from '../utils/otpUtils.js';
 import { generateTokens } from '../utils/tokenUtils.js';
 import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
 export const login = async (req, res) => {
   try {
     const { phoneNumber, password } = req.sanitizedBody; // Using sanitized input
-        
+    console.log('Login Attempt - Phone Number:', phoneNumber, 'Password:', password);
+    
     // Find user by phone number
     const user = await User.findOne({ phoneNumber }).select('+password +sessions');
+    
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      console.warn('Login failed: No user found with phone number ' + phoneNumber);
+      return res.status(404).json({ 
+        message: 'User not found', 
+        error: 'USER_NOT_FOUND' 
+      });
     }
 
-    // Check password
-    const isMatch = await user.comparePassword(password);
+    // Compare passwords
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      // Reset login attempts on successful login
-      const clientIp = req.ip || req.connection.remoteAddress;
-      if (global.loginAttempts) {
-        global.loginAttempts.delete(clientIp);
-      }
-      return res.status(401).json({ message: 'Invalid credentials' });
+      console.warn('Login failed: Invalid password for phone number ' + phoneNumber);
+      return res.status(401).json({ 
+        message: 'Invalid credentials', 
+        error: 'INVALID_PASSWORD' 
+      });
     }
 
     // Check for maximum sessions (limit to 5 active sessions)
@@ -42,7 +48,7 @@ export const login = async (req, res) => {
     const deviceInfo = req.deviceInfo || {};
     user.sessions.push({
       deviceId: sessionId,
-      device: `${deviceInfo.browser || 'Unknown'} on ${deviceInfo.os || 'Unknown'}`,
+      device: (deviceInfo.browser || 'Unknown') + ' on ' + (deviceInfo.os || 'Unknown'),
       lastActive: new Date(),
       ipAddress: req.ip || req.connection.remoteAddress,
       userAgent: req.headers['user-agent'] || 'Unknown'
@@ -84,7 +90,8 @@ export const login = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
-    // Send response
+    // Successful login
+    console.log('Login successful for phone number ' + phoneNumber);
     res.status(200).json({
       message: 'Login successful',
       accessToken,
@@ -307,11 +314,10 @@ export const resetPassword = async (req, res) => {
 
 export const refreshToken = async (req, res) => {
   try {
-       
-
     // Get refresh token from multiple sources
     const refreshToken = req.cookies?.refreshToken || req.header('Authorization')?.replace('Bearer ', '');
-    console.log('Refresh Token:', refreshToken);
+    console.log('Refresh Token Received:', refreshToken);
+
     // If no refresh token found, return unauthorized
     if (!refreshToken) {
       console.warn('No refresh token found in request');
@@ -325,13 +331,21 @@ export const refreshToken = async (req, res) => {
     let decoded;
     try { 
       decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+      console.log('Token Decoded Successfully:', decoded);
     } catch (verifyError) {
-      console.error('Refresh token verification failed:', verifyError);
+      console.error('Refresh token verification FAILED:', {
+        error: verifyError.message,
+        name: verifyError.name,
+        token: refreshToken,
+        secret: process.env.REFRESH_TOKEN_SECRET ? 'EXISTS' : 'MISSING'
+      });
+
       // Clear the invalid cookie
       res.clearCookie('refreshToken');
       return res.status(401).json({ 
         message: 'Invalid or expired refresh token',
-        error: 'TOKEN_EXPIRED' 
+        error: verifyError.name,
+        details: verifyError.message
       });
     }
         
@@ -349,39 +363,29 @@ export const refreshToken = async (req, res) => {
     // Generate new tokens
     const { accessToken, newRefreshToken } = generateTokens(user);
 
-    // Update refresh token in database
-    await Token.findOneAndUpdate({ 
-      token: refreshToken,
-      user: user._id 
-    }, { 
-      token: newRefreshToken,
-      isActive: true 
-    });
-
     // Set new refresh token as HTTP-only cookie
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // use secure in production
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
     // Return new access token
-    res.json({ 
-      accessToken,
+    return res.status(200).json({ 
+      accessToken, 
       user: {
         id: user._id,
-        name: user.name,
         phoneNumber: user.phoneNumber,
         role: user.role
       }
     });
+
   } catch (error) {
-    console.error('Refresh token error:', error);
-    res.clearCookie('refreshToken');
-    res.status(401).json({ 
-      message: 'Token refresh failed',
-      error: 'REFRESH_FAILED' 
+    console.error('Unexpected Refresh Token Error:', error);
+    res.status(500).json({ 
+      message: 'Token refresh failed', 
+      error: error.message 
     });
   }
 };

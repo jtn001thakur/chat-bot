@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { VscEye, VscEyeClosed } from "react-icons/vsc";
 import { authApi } from '../utils/api';
 import { 
@@ -8,29 +8,41 @@ import {
 } from '../utils/validation';
 import { 
   handleLogin, 
-  getAccessToken 
+  getAccessToken,
+  isAuthenticated
 } from '../utils/localStorageUtils';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState({
     countryCode: '+91',
-    phoneNumber: "9999999999",
-    password: "Admin@123"
+    phoneNumber: "",
+    password: ""
   });
   const [showPassword, setShowPassword] = useState(false);
   const [buttonDisabled, setButtonDisabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
+  // New state for admin login modal
+  const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
+  const [adminLoginData, setAdminLoginData] = useState({
+    applicationName: '',
+    phoneNumber: '',
+    password: ''
+  });
+  const [adminLoginErrors, setAdminLoginErrors] = useState({});
+
   // Check authentication on component mount
   useEffect(() => {
-    const token = getAccessToken();
-    if (token) {
-      // Redirect to home or dashboard if already logged in
-      navigate('/');
+    // Check if already authenticated
+    if (isAuthenticated()) {
+      // Redirect to dashboard or previous page
+      const from = location.state?.from || '/';
+      navigate(from, { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, location]);
 
   // Validate inputs
   useEffect(() => {
@@ -40,15 +52,68 @@ export default function LoginPage() {
     setButtonDisabled(!(isPhoneValid && isPasswordValid));
   }, [user]);
 
-  // Handle login submission
+  // Handle admin login
+  const onAdminLogin = async () => {
+    setAdminLoginErrors({});
+    setLoading(true);
+    
+    try {
+      // Validate inputs
+      const errors = {};
+      if (!adminLoginData.applicationName) {
+        errors.applicationName = 'Application name is required';
+      }
+      if (!validatePhoneNumber(adminLoginData.phoneNumber)) {
+        errors.phoneNumber = 'Please enter a valid phone number';
+      }
+      if (!adminLoginData.password) {
+        errors.password = 'Password is required';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setAdminLoginErrors(errors);
+        setLoading(false);
+        return;
+      }
+
+      // Attempt admin login
+      const response = await authApi.adminLogin({
+        applicationName: adminLoginData.applicationName,
+        phoneNumber: adminLoginData.phoneNumber,
+        password: adminLoginData.password
+      });
+
+      // Handle successful login
+      handleLogin(response.token, response.user);
+      
+      // Redirect to dashboard
+      navigate('/', { replace: true });
+    } catch (error) {
+      // Handle login errors
+      const errorMessage = error.message || 'Admin login failed';
+
+      // Set error message
+      setAdminLoginErrors({ 
+        api: errorMessage 
+      });
+
+      // Log error details
+      console.error('Admin Login Error:', {
+        message: errorMessage,
+        fullError: error
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Existing login method
   const onLogin = async () => {
     // Reset previous errors
     setErrors({});
+    setLoading(true);
     
     try {
-      setLoading(true);
-      setErrors({}); // Clear previous errors
-
       // Validate phone number
       const cleanPhoneNumber = sanitizePhoneNumber(user.phoneNumber);
       if (!validatePhoneNumber(cleanPhoneNumber)) {
@@ -59,15 +124,30 @@ export default function LoginPage() {
 
       // Prepare full phone number
       const fullPhoneNumber = `${cleanPhoneNumber}`;
-      
-      // Attempt login
-      await authApi.login(fullPhoneNumber, user.password);
 
-      // Redirect to home or dashboard if login is successful
-      navigate('/');
+      // Attempt login
+      const response = await authApi.login(fullPhoneNumber, user.password);
+
+      // Ensure response has token and user
+      if (!response.data || !response.data.accessToken || !response.data.user) {
+        throw new Error('Invalid login response: Missing token or user data');
+      }
+
+      // Destructure response
+      const { accessToken, user: userData } = response.data;
+
+      // Handle successful login
+      handleLogin(accessToken, userData);
+      
+      // Redirect to dashboard or previous page
+      const from = location.state?.from || '/';
+      navigate(from, { replace: true });
     } catch (error) {
       // Handle specific login errors
-      const errorMessage = error.message || "Login failed";
+      const errorMessage = 
+        error.response?.data?.message || 
+        error.message || 
+        "Login failed. Please try again.";
       
       // Map specific error messages
       const errorMap = {
@@ -78,11 +158,14 @@ export default function LoginPage() {
 
       // Set the error message
       setErrors({ 
-        api: errorMap[errorMessage] || errorMessage || "Unable to login. Please try again"
+        api: errorMap[errorMessage] || errorMessage
       });
 
-      // Optional: Log the error for debugging
-      console.error('Login error:', error);
+      // Log error details
+      console.error('Login Error:', {
+        message: errorMessage,
+        fullError: error
+      });
     } finally {
       setLoading(false);
     }
@@ -171,9 +254,9 @@ export default function LoginPage() {
           {/* Login Button */}
           <button
             onClick={onLogin}
-            disabled={buttonDisabled}
+            disabled={buttonDisabled || loading}
             className={`w-full cursor-pointer py-2 px-4 rounded-lg text-white font-medium ${
-              buttonDisabled
+              (buttonDisabled || loading)
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
             } transition-colors duration-200`}
@@ -193,8 +276,146 @@ export default function LoginPage() {
               </span>
             </p>
           </div>
+
+          {/* Admin Login Link */}
+          <div className="text-center mt-4">
+            <p 
+              onClick={() => setShowAdminLoginModal(true)} 
+              className="text-blue-600 hover:underline cursor-pointer"
+            >
+              Login as Admin
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* Admin Login Modal */}
+      {showAdminLoginModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
+            <h2 className="text-2xl font-bold mb-6 text-center">Admin Login</h2>
+            
+            {/* Application Name Input */}
+            <div className="mb-4">
+              <label htmlFor="applicationName" className="block text-gray-700 mb-2">
+                Application Name
+              </label>
+              <input
+                id="applicationName"
+                type="text"
+                value={adminLoginData.applicationName}
+                onChange={(e) => {
+                  setAdminLoginData({ ...adminLoginData, applicationName: e.target.value });
+                  setAdminLoginErrors((prev) => ({ ...prev, applicationName: undefined }));
+                }}
+                placeholder="Enter application name"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-500"
+              />
+              {adminLoginErrors.applicationName && (
+                <div className="text-red-500 text-sm mt-1">
+                  {adminLoginErrors.applicationName}
+                </div>
+              )}
+            </div>
+
+            {/* Phone Number Input */}
+            <div className="mb-4">
+              <label htmlFor="adminPhoneNumber" className="block text-gray-700 mb-2">
+                Phone Number
+              </label>
+              <div className="flex items-center">
+                <div className="flex items-center justify-center border border-r-0 border-gray-300 rounded-l-lg px-3 py-2 bg-gray-100">
+                  <span className="mr-2">🇮🇳</span>
+                  <span className="text-sm">+91</span>
+                </div>
+                <input
+                  id="adminPhoneNumber"
+                  type="tel"
+                  maxLength="10"
+                  value={adminLoginData.phoneNumber}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    setAdminLoginData({ ...adminLoginData, phoneNumber: value });
+                    setAdminLoginErrors((prev) => ({ ...prev, phoneNumber: undefined }));
+                  }}
+                  placeholder="Enter phone number"
+                  className="flex-1 p-2 border border-l-0 border-gray-300 rounded-r-lg focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              {adminLoginErrors.phoneNumber && (
+                <div className="text-red-500 text-sm mt-1">
+                  {adminLoginErrors.phoneNumber}
+                </div>
+              )}
+            </div>
+
+            {/* Password Input */}
+            <div className="mb-4">
+              <label htmlFor="adminPassword" className="block text-gray-700 mb-2">
+                Password
+              </label>
+              <section className="flex w-full items-center relative">
+                <input
+                  id="adminPassword"
+                  type={showPassword ? "text" : "password"}
+                  value={adminLoginData.password}
+                  onChange={(e) => {
+                    setAdminLoginData({ ...adminLoginData, password: e.target.value });
+                    setAdminLoginErrors((prev) => ({ ...prev, password: undefined }));
+                  }}
+                  placeholder="Enter your password"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-500"
+                />
+                {showPassword ? (
+                  <VscEye
+                    className="text-xl absolute right-2 cursor-pointer top-[50%] translate-y-[-50%]"
+                    onClick={() => setShowPassword(false)}
+                  />
+                ) : (
+                  <VscEyeClosed
+                    className="text-xl absolute right-2 cursor-pointer top-[50%] translate-y-[-50%]"
+                    onClick={() => setShowPassword(true)}
+                  />
+                )}
+              </section>
+              {adminLoginErrors.password && (
+                <div className="text-red-500 text-sm mt-1">
+                  {adminLoginErrors.password}
+                </div>
+              )}
+            </div>
+
+            {/* API Error */}
+            {adminLoginErrors.api && (
+              <div className="text-red-500 text-center mb-4 bg-red-50 p-2 rounded-lg">
+                <p className="font-medium">{adminLoginErrors.api}</p>
+              </div>
+            )}
+
+            {/* Admin Login Buttons */}
+            <div className="flex space-x-4">
+              <button
+                onClick={onAdminLogin}
+                disabled={loading}
+                className={`flex-1 text-white py-2 px-4 rounded-lg transition-colors ${
+                  loading 
+                    ? "bg-gray-400 cursor-not-allowed" 
+                    : "bg-indigo-600 hover:bg-indigo-700"
+                }`}
+              >
+                {loading ? "Logging in..." : "Login"}
+              </button>
+              <button
+                onClick={() => setShowAdminLoginModal(false)}
+                disabled={loading}
+                className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
