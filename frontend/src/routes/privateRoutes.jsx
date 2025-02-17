@@ -7,6 +7,7 @@ import Admin from '../components/Admin';
 import SuperAdmin from '../components/SuperAdmin';
 import ProfilePage from '../components/Profile';
 import Header from '../components/Header';
+import ApplicationManagement from '../components/ApplicationManagement';
 
 export const privateRoutes = [
   {
@@ -23,6 +24,15 @@ export const privateRoutes = [
       <ProtectedRoute>
         <Header />
         <ProfilePage />
+      </ProtectedRoute>
+    )
+  },
+  {
+    path: '/superadmin/applications/:applicationId/manage',
+    element: (
+      <ProtectedRoute>
+        <Header />
+        <ApplicationManagement />
       </ProtectedRoute>
     )
   },

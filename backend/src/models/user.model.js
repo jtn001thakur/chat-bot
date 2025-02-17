@@ -1,6 +1,6 @@
-import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
-import { v4 as uuidv4 } from "uuid";
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 
 const userSchema = new mongoose.Schema(
   {
@@ -10,33 +10,32 @@ const userSchema = new mongoose.Schema(
     },
     phoneNumber: {
       type: String,
-      required: [true, "Phone number is required"],
+      required: [true, 'Phone number is required'],
       unique: true,
       trim: true,
       validate: {
         validator: function (v) {
           return /^\d{10}$/.test(v);
         },
-        message: "Phone number must be a 10-digit number",
+        message: 'Phone number must be a 10-digit number',
       },
     },
     avatar: {
       type: String,
-      default: "",
+      default: '',
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
-      minlength: [6, "Password must be at least 6 characters long"],
+      required: [true, 'Password is required'],
+      minlength: [6, 'Password must be at least 6 characters long'],
     },
     role: {
       type: String,
-      enum: ["user", "admin", "superadmin"],
-      default: "user",
+      enum: ['user', 'admin', 'superadmin'],
+      default: 'user',
     },
     combinedId: {
       type: String,
-      unique: true,
       sparse: true,
     },
     sessions: [
@@ -63,11 +62,10 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Ensure unique index on combinedId
-userSchema.index({ combinedId: 1 }, { unique: true, sparse: true });
+// userSchema.index({ combinedId: 1 }, { unique: true, sparse: true });
 
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
 
   try {
     const salt = await bcrypt.genSalt(10);
@@ -92,4 +90,4 @@ userSchema.methods.revokeSession = function (sessionId) {
   return this.save();
 };
 
-export default mongoose.model("User", userSchema);
+export default mongoose.model('User', userSchema);

@@ -12,54 +12,54 @@ export const sendMessage = async (req, res) => {
       phoneNumber
     } = req.body;
 
-    console.log("Received message payload:", {
-      message,
-      receiver,
-      application,
-      metadata,
-      role,
-      phoneNumber
-    });
+    // console.log("Received message payload:", {
+    //   message,
+    //   receiver,
+    //   application,
+    //   metadata,
+    //   role,
+    //   phoneNumber
+    // });
 
-    let receiverIds = [];
     let sender = null;
+    let receiverIds = [];
 
     if (role === 'user') {
-      // For external/mobile app users
-      // Find admins and superadmins for the specific application
-      const adminUsers = await User.find({
-        $or: [
-          { role: 'admin', applications: { $in: [application] } },
-          { role: 'superadmin' }
-        ]
-      }).select('_id');
-
-      receiverIds = adminUsers.map(user => user._id);
-      
       // Create sender details for external user
-      sender = {
-        _id: `${application}:${phoneNumber}`
-      };
+      sender = `${application}${phoneNumber}`;
     } else if (role === 'admin' || role === 'superadmin') {
       // Existing admin/superadmin logic
-      const receiverUser = await User.findOne({ 
+      const user = await User.findOne({ 
         $or: [
           { _id: receiver },
           { combinedId: receiver }
         ]
       });
       
-      if (!receiverUser) {
+      if (!user) {
         return res.status(404).json({ message: 'Receiver not found' });
       }
       
-      receiverIds = [receiverUser._id];
+      sender = user._id;
+      
+      // If a specific receiver is provided
+      if (receiver) {
+        receiverIds = [receiver];
+      }
+    }
+
+    // Determine receivers based on role
+    if (receiver) {
+      receiverIds = [receiver];
+    } else if (role === 'user') {
+      // For user messages, leave receivers empty or set to support
+      receiverIds = [];
     }
 
     const newMessage = new Message({
       // Optional sender details
-      sender: sender ? sender._id : null,
-      externalSenderId: role === 'user' ? `${application}:${phoneNumber}` : null,
+      sender: sender,
+      externalSenderId: role === 'user' ? `${application}${phoneNumber}` : null,
 
       // Receivers
       receivers: receiverIds,
@@ -105,9 +105,9 @@ export const getMessages = async (req, res) => {
     } = req.body;
     
     // For user role, create a unique userId
-    const userId = role === 'user' ? `${application}:${phoneNumber}` : null;
+    const userId = role === 'user' ? `${application}${phoneNumber}` : null;
     
-    console.log("getMessages body ", req.body);
+    // console.log("getMessages body ", req.body, "user id : ", userId);
 
     // Validate required parameters
     if (!application) {
@@ -128,39 +128,38 @@ export const getMessages = async (req, res) => {
 
         // Messages from the user
         { sender: userId },
-
-        // Messages for admin/superadmin in their applications
-        ...(role === 'admin' ? [
-          {
-            senderRole: 'user',
-            application: application
-          }
-        ] : [])
       ];
     }
 
-    // Fetch messages
-    const messages = await Message.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip || 0)
-      .limit(limit || 50)
-      .populate('sender', 'name')
-      .populate('receivers', 'name');
+    // Fetch messages with pagination and enrich with sender details
+    const messages = await Message.aggregate([
+      { $match: query },
+      // Sort in ascending order by creation time
+      { $sort: { createdAt: 1 } },
+      { $skip: skip || 0 },
+      { $limit: limit || 100 },
+      {
+        $addFields: {
+          senderInfo: {
+            application: '$application',
+            phoneNumber: { $substr: ['$sender', application.length, -1] }
+          }
+        }
+      }
+    ]);
 
-    // Count total messages
-    const total = await Message.countDocuments(query);
+    // Count total messages for pagination
+    const totalMessages = await Message.countDocuments(query);
 
-    res.status(200).json({
-      messages: messages,
-      total: total,
-      userDetails: null  // You can populate this if needed
+    return res.status(200).json({
+      messages,
+      total: totalMessages
     });
   } catch (error) {
     console.error('Error retrieving messages:', error);
-    res.status(500).json({
+    return res.status(500).json({
       message: 'Error retrieving messages',
-      error: error.message,
-      details: error.toString()
+      error: error.message
     });
   }
 };

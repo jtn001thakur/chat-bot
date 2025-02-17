@@ -1,4 +1,4 @@
- import 'dotenv/config';
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import parseDeviceInfo from './middleware/deviceInfo.middleware.js';
+import superadminRoutes from './routes/superadmin.routes.js';
 
 const app = express();
 
@@ -47,14 +48,15 @@ app.use(parseDeviceInfo);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/superadmin', superadminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
-        message: 'Something went wrong!',
-        error: process.env.NODE_ENV === 'production' ? {} : err.stack
-    });
+  console.error(err.stack);
+  res.status(500).json({
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'production' ? {} : err.stack
+  });
 });
 
 export default app;

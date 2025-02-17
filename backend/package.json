@@ -7,8 +7,10 @@
     "kill-node": "powershell -ExecutionPolicy Bypass -File kill-node.ps1",
     "kill-port": "powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force\"",
     "pre-dev": "npm run kill-node && npm run kill-port",
-    "dev": "nodemon --trace-warnings src/server.js",
-    "start": "node src/server.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "dev": "npm run lint && nodemon --trace-warnings src/server.js",
+    "start": "npm run lint && node src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -30,7 +32,11 @@
     "xss": "^1.0.15"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.20.1",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.0.0",
     "nodemon": "^3.1.9"
   }
 }

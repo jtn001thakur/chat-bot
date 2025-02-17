@@ -1,13 +1,13 @@
 import express from 'express';
 import * as authController from '../controllers/auth.controller.js';
-import auth from '../middleware/auth.middleware.js';
+import { verifyToken } from '../middleware/auth.middleware.js';
 import { sanitizeInput } from '../middleware/sanitize.middleware.js';
 
 const router = express.Router();
 
 // Basic health check
-router.get("/", (req, res) => {
-    res.send('Hello World!');
+router.get('/', (req, res) => {
+  res.send('Hello World!');
 });
 
 // Apply sanitization middleware to all auth routes
@@ -25,20 +25,20 @@ router.post('/refresh-token', authController.refreshToken);
 
 // Logout route with optional authentication middleware
 router.post('/logout', 
-    (req, res, next) => {
-        // Try to verify token if present, but don't block if verification fails
-        auth(req, res, (err) => {
-            if (err) {
+            (req, res, next) => {
+              // Try to verify token if present, but don't block if verification fails
+              verifyToken(req, res, (err) => {
+                if (err) {
                 // If token verification fails, continue to logout
-                req.user = null;
-            }
-            next();
-        });
-    }, 
-    authController.logout
+                  req.user = null;
+                }
+                next();
+              });
+            }, 
+            authController.logout
 );
 
 // Profile route with authentication middleware
-router.get('/profile', auth, authController.getProfile);
+router.get('/profile', verifyToken, authController.getProfile);
 
 export default router;

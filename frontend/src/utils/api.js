@@ -170,6 +170,9 @@ export const authApi = {
   }
 };
 
+// Removed old appApi methods 
+// These are now replaced by superAdminApi methods
+
 // Chat API methods
 export const chatApi = {
   // Send a message
@@ -186,19 +189,258 @@ export const chatApi = {
   getMessages: (messagePayload) => {
     return api.post('/chat/messages', messagePayload)
       .then(response => {
-        // Transform backend messages to frontend format
-        return response.data.messages.map(msg => ({
-          id: msg._id,
-          content: msg.message || msg.content,
-          sender: msg.senderRole === 'user' ? 'user' : 'support',
-          timestamp: msg.createdAt,
-          mediaUrl: msg.metadata?.mediaFile || null
-        }));
+        // Return the full message object from the backend
+        return response.data;
       })
       .catch(error => {
         console.error('Failed to fetch messages:', error.response?.data || error.message);
         throw error;
       });
+  }
+};
+
+// Superadmin API methods
+export const superAdminApi = {
+  // Application Management
+  createApplication: async (applicationData) => {
+    try {
+      const response = await api.post('/superadmin/applications', applicationData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating application:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  getApplications: async () => {
+    try {
+      const response = await api.get('/superadmin/applications');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching applications:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  deleteApplication: async (applicationId) => {
+    try {
+      const response = await api.delete(`/superadmin/applications/${applicationId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting application:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  getApplicationManagementDetails: async (applicationId) => {
+    try {
+      console.log('Fetching application management details for ID:', applicationId);
+      const response = await api.get(`/superadmin/applications/${applicationId}/manage`);
+      console.log('Received application management details:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Detailed error fetching application management details:', {
+        errorResponse: error.response?.data,
+        errorMessage: error.message,
+        applicationId: applicationId
+      });
+      
+      // Provide a more informative error
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        throw new Error(
+          error.response.data.message || 
+          'Failed to fetch application management details'
+        );
+      } else if (error.request) {
+        // The request was made but no response was received
+        throw new Error('No response received from server');
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        throw new Error('Error setting up the request');
+      }
+    }
+  },
+
+  addApplicationAdmin: async (applicationId, phoneNumber) => {
+    try {
+      console.log('Adding admin to application:', { applicationId, phoneNumber });
+      const response = await api.post(
+        `/superadmin/applications/${applicationId}/add-admin`, 
+        { phoneNumber }
+      );
+      console.log('Admin added successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Detailed error adding application admin:', {
+        errorResponse: error.response?.data,
+        errorMessage: error.message,
+        applicationId: applicationId,
+        phoneNumber: phoneNumber
+      });
+      
+      // Provide a more informative error
+      if (error.response) {
+        throw new Error(
+          error.response.data.message || 
+          'Failed to add application admin'
+        );
+      } else if (error.request) {
+        throw new Error('No response received from server');
+      } else {
+        throw new Error('Error setting up the request');
+      }
+    }
+  },
+
+  // Block User from Application
+  blockUserFromApplication: async (applicationId, phoneNumber, reason = '') => {
+    try {
+      console.log('Attempting to block user:', { 
+        applicationId, 
+        phoneNumber,
+        reason
+      });
+
+      const response = await api.post(
+        `/superadmin/applications/${applicationId}/block-user`, 
+        { phoneNumber, reason }
+      );
+      
+      console.log('User blocked successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Detailed error blocking user:', {
+        errorResponse: error.response?.data,
+        errorMessage: error.message,
+        applicationId: applicationId,
+        phoneNumber: phoneNumber
+      });
+      
+      // Provide a more informative error
+      if (error.response) {
+        throw new Error(
+          error.response.data.message || 
+          'Failed to block user'
+        );
+      } else if (error.request) {
+        throw new Error('No response received from server');
+      } else {
+        throw new Error('Error setting up the request');
+      }
+    }
+  },
+
+  // Unblock User from Application
+  unblockUserFromApplication: async (applicationId, phoneNumber) => {
+    try {
+      console.log('Attempting to unblock user:', { 
+        applicationId, 
+        phoneNumber 
+      });
+
+      const response = await api.post(
+        `/superadmin/applications/${applicationId}/unblock-user`, 
+        { phoneNumber }
+      );
+      
+      console.log('User unblocked successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Detailed error unblocking user:', {
+        errorResponse: error.response?.data,
+        errorMessage: error.message,
+        applicationId: applicationId,
+        phoneNumber: phoneNumber
+      });
+      
+      // Provide a more informative error
+      if (error.response) {
+        throw new Error(
+          error.response.data.message || 
+          'Failed to unblock user'
+        );
+      } else if (error.request) {
+        throw new Error('No response received from server');
+      } else {
+        throw new Error('Error setting up the request');
+      }
+    }
+  },
+
+  // Get Blocked Users for Application
+  getBlockedUsersForApplication: async (applicationId) => {
+    try {
+      console.log('Fetching blocked users for application:', applicationId);
+
+      const response = await api.get(
+        `/superadmin/applications/${applicationId}/blocked-users`
+      );
+      
+      console.log('Blocked users retrieved successfully:', response.data);
+      return response.data.blockedUsers;
+    } catch (error) {
+      console.error('Detailed error fetching blocked users:', {
+        errorResponse: error.response?.data,
+        errorMessage: error.message,
+        applicationId: applicationId
+      });
+      
+      // Provide a more informative error
+      if (error.response) {
+        throw new Error(
+          error.response.data.message || 
+          'Failed to retrieve blocked users'
+        );
+      } else if (error.request) {
+        throw new Error('No response received from server');
+      } else {
+        throw new Error('Error setting up the request');
+      }
+    }
+  },
+
+  // User Management
+  getAllUsers: async () => {
+    try {
+      const response = await api.get('/superadmin/users');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching users:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  createUser: async (userData) => {
+    try {
+      const response = await api.post('/superadmin/users', userData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating user:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  deleteUser: async (userId) => {
+    try {
+      const response = await api.delete(`/superadmin/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting user:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // System Analytics
+  getSystemAnalytics: async () => {
+    try {
+      const response = await api.get('/superadmin/analytics');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching system analytics:', error.response?.data || error.message);
+      throw error;
+    }
   }
 };
 

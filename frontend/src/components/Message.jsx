@@ -1,13 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { formatDistanceToNow } from 'date-fns';
+import { formatChatTimestamp } from '../utils/dateUtils';
 
-const Message = ({ message, isUser }) => {
-  // Format timestamp to human-readable format
-  const formatTimestamp = (timestamp) => {
-    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
-  };
-
+const Message = ({ message, isYours }) => {
   // Render media preview if exists
   const renderMediaPreview = () => {
     if (!message.mediaUrl) return null;
@@ -51,25 +46,35 @@ const Message = ({ message, isUser }) => {
       transition={{ duration: 0.3 }}
       className={`
         flex flex-col 
-        ${isUser ? 'items-end' : 'items-start'}
+        ${isYours ? 'items-end' : 'items-start'}
         mb-4
       `}
     >
+      {/* Sender Information for non-user messages */}
+      {!isYours && message.isFirstInGroup && (
+        <div className={`
+          text-xs mb-1 text-gray-600
+          ${isYours ? 'text-right w-full' : 'text-left'}
+        `}>
+          {message.senderApplication} • {message.senderPhoneNumber}
+        </div>
+      )}
+
       <div 
         className={`
           max-w-[80%] 
           p-3 
           rounded-2xl 
           relative 
-          ${isUser 
+          ${isYours 
             ? 'bg-blue-500 text-white rounded-br-none' 
             : 'bg-gray-200 text-black rounded-bl-none'}
         `}
       >
         {/* Message Text */}
-        {message.textContent && (
+        {message.message && (
           <div className="whitespace-pre-wrap break-words">
-            {message.textContent}
+            {message.message}
           </div>
         )}
 
@@ -80,10 +85,10 @@ const Message = ({ message, isUser }) => {
         <div 
           className={`
             text-xs mt-1 
-            ${isUser ? 'text-blue-200' : 'text-gray-500'}
+            ${isYours ? 'text-blue-200' : 'text-gray-500'}
           `}
         >
-          {formatTimestamp(message.timestamp)}
+          {formatChatTimestamp(message.createdAt)}
         </div>
       </div>
     </motion.div>

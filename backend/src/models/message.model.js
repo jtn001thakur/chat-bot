@@ -78,10 +78,10 @@ const messageSchema = new mongoose.Schema({
 });
 
 // Compound index for efficient querying
-messageSchema.index({ 
-  application: 1, 
-  createdAt: -1 
-});
+// messageSchema.index({ 
+//   application: 1, 
+//   createdAt: -1 
+// });
 
 const Message = mongoose.model('Message', messageSchema);
 

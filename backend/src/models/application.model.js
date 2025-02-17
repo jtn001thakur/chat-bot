@@ -1,44 +1,49 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const applicationSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    description: {
-        type: String,
-        required: true
-    },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    assignedAdmins: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    }],
-    status: {
-        type: String,
-        enum: ['active', 'inactive'],
-        default: 'active'
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now
-    }
+  name: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    maxlength: 50
+  },
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'suspended'],
+    default: 'active'
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  admins: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }]
+}, {
+  timestamps: true,
+  collection: 'applications'
 });
 
-// Update the updatedAt timestamp before saving
-applicationSchema.pre('save', function(next) {
-    this.updatedAt = Date.now();
-    next();
+// Pre-save hook to ensure unique name (case-insensitive)
+applicationSchema.pre('save', async function(next) {
+  if (this.isNew || this.isModified('name')) {
+    const existingApp = await this.constructor.findOne({ 
+      name: this.name.toLowerCase() 
+    });
+    
+    if (existingApp && existingApp._id.toString() !== this._id.toString()) {
+      const error = new Error('Application with this name already exists');
+      error.name = 'ValidationError';
+      return next(error);
+    }
+  }
+  next();
 });
 
 const Application = mongoose.model('Application', applicationSchema);
+
 export default Application;
