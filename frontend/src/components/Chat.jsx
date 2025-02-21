@@ -1,263 +1,182 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import Message from './Message';
-import MessageInput from './MessageInput';
-import { FaUser, FaCircle, FaArrowLeft } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import { FaPaperPlane, FaUser } from 'react-icons/fa';
 import { chatApi } from '../utils/api';
-import { areTimestampsClose } from '../utils/dateUtils';
 
-const Chat = ({ initialUser }) => {
-  const navigate = useNavigate();
+const Chat = ({ 
+  initialUser, 
+  fullScreen = false, 
+  onClose 
+}) => {
   const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isTyping, setIsTyping] = useState(false);
-  const [totalMessages, setTotalMessages] = useState(0);
   const messagesEndRef = useRef(null);
-  const isFetchedRef = useRef(false);
 
-  // Fetch existing messages on component mount
+  // Fetch messages when component mounts or user changes
   const fetchMessages = useCallback(async () => {
-    try {
-      // Ensure we have all required user information
-      if (!initialUser?.application || !initialUser?.phoneNumber) {
-        console.error('Missing user information for fetching messages', initialUser);
-        setError('User information is incomplete');
-        return;
-      }
+    if (!initialUser) {
+      setError('No user information provided');
+      setIsLoading(false);
+      return;
+    }
 
+    try {
       setIsLoading(true);
       setError(null);
-      console.log('Fetching messages for user:', initialUser);
 
-      // Use getMessages from api.js
-      const response = await chatApi.getMessages({
-        application: initialUser.application,
-        phoneNumber: initialUser.phoneNumber,
+      console.log('Fetching messages for:', initialUser);
+
+      const queryParams = {
+        application: initialUser.application || initialUser._id,
+        phoneNumber: initialUser.phoneNumber || `app_${initialUser._id}`,
         limit: 100,
         skip: 0,
-        role: initialUser.role
-      });
+        role: initialUser.role || 'application_support'
+      };
+
+      console.log('Query Parameters:', queryParams);
+
+      const response = await chatApi.getMessages(queryParams);
       
-      console.log('Full API response:', response);
+      console.log('API Response:', response);
+
+      const fetchedMessages = response.messages || response || [];
       
-      // Ensure we're setting the correct part of the response
-      const fetchedMessages = response.messages || response;
-      
-      if (!fetchedMessages || fetchedMessages.length === 0) {
-        console.warn('No messages found');
-        setMessages([]);
-      } else {
-        console.log('Setting messages:', fetchedMessages);
-        setMessages(fetchedMessages);
-      }
-      
-      isFetchedRef.current = true;
-    } catch (error) {
-      console.error('Failed to fetch messages:', error);
-      setError(error.message || 'Failed to fetch messages');
-      setMessages([]); // Ensure messages is an empty array on error
+      setMessages(fetchedMessages);
+    } catch (err) {
+      console.error('Error fetching messages:', err);
+      setError(err.message || 'Failed to fetch messages');
+      setMessages([]);
     } finally {
       setIsLoading(false);
     }
   }, [initialUser]);
 
+  // Fetch messages on mount
   useEffect(() => {
-    // Fetch messages when component mounts or initialUser changes
-    if (initialUser?.application && initialUser?.phoneNumber) {
-      fetchMessages();
+    fetchMessages();
+  }, [fetchMessages]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [initialUser, fetchMessages]);
-
-  const scrollToBottom = () => {
-    // Use setTimeout to ensure DOM has updated
-    setTimeout(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: "auto", 
-          block: "end" 
-        });
-      }
-    }, 100);
-  };
-
-  useEffect(() => {
-    // Scroll to bottom whenever messages change
-    scrollToBottom();
   }, [messages]);
 
-  const getUserInfo = () => {
-    // Implement logic to get user info
-    // For demonstration purposes, assume user role is 'user'
-    return { role: 'user' };
-  };
+  // Send message handler
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    
+    if (!newMessage.trim()) return;
 
-  const handleSendMessage = async (newMessage) => {
     try {
-      const messagePayload = {
-        message: newMessage.textContent || '',
-        // Receiver is optional, will be handled server-side
-        receiver: getUserInfo().role !== 'user' ? newMessage.receiver : null, 
-        role: initialUser.role,
-        phoneNumber: initialUser.phoneNumber,
-        application: initialUser.application || null,
-        metadata: {
-          mediaFile: newMessage.mediaFile 
-            ? URL.createObjectURL(newMessage.mediaFile) 
-            : null
-        }
+      const messageData = {
+        receiverId: initialUser._id,
+        content: newMessage.trim(),
+        application: initialUser.application || initialUser._id
       };
 
-      // Send message via API
-      const response = await chatApi.sendMessage(messagePayload);
-
-      // Determine the correct message data based on response structure
-      const sentMessage = response.chatMessages 
-        ? response.chatMessages[0] 
-        : response.offlineData || {};
-
-      // Construct a consistent message object
-      const formattedMessage = {
-        _id: sentMessage._id || Date.now().toString(),
-        message: sentMessage.message || messagePayload.message,
-        content: sentMessage.message || messagePayload.message,
-        sender: sentMessage.sender || `${initialUser.application}${initialUser.phoneNumber}`,
-        senderRole: sentMessage.senderRole || initialUser.role,
-        application: sentMessage.application || initialUser.application,
-        createdAt: sentMessage.timestamp || sentMessage.createdAt || new Date().toISOString(),
-        metadata: sentMessage.metadata || messagePayload.metadata,
-        isYours: true  // Message just sent by current user
-      };
-
-      // Add sent message to state
-      setMessages(prevMessages => [...prevMessages, formattedMessage]);
-
-      // Reset media file if used
-      if (newMessage.mediaFile) {
-        URL.revokeObjectURL(newMessage.mediaFile);
-      }
+      const sentMessage = await chatApi.sendMessage(messageData);
+      
+      // Update messages
+      setMessages(prevMessages => [...prevMessages, sentMessage]);
+      
+      // Clear input
+      setNewMessage('');
     } catch (error) {
       console.error('Failed to send message:', error);
-      
-      // Optimistic UI update with a pending message
-      const pendingMessage = {
-        _id: `pending-${Date.now()}`,
-        message: newMessage.textContent || '',
-        content: newMessage.textContent || '',
-        sender: `${initialUser.application}${initialUser.phoneNumber}`,
-        senderRole: initialUser.role,
-        application: initialUser.application,
-        createdAt: new Date().toISOString(),
-        metadata: newMessage.mediaFile 
-          ? { mediaFile: URL.createObjectURL(newMessage.mediaFile) } 
-          : {},
-        isYours: true,
-        status: 'FAILED'
-      };
-
-      setMessages(prevMessages => [...prevMessages, pendingMessage]);
-
-      // Optional: Show a toast or error message to the user
-      // You might want to add a toast library or error handling component
+      setError('Failed to send message');
     }
   };
 
-  // Render content based on loading and messages
-  const renderContent = () => {
-    // Still loading
-    if (isLoading) {
-      return (
-        <div className="text-center text-gray-500 mt-10">
-          <p>Loading messages...</p>
-          <p className="text-xs mt-2">Fetching conversation history</p>
-        </div>
-      );
-    }
+  // Render loading state
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
-    // Error occurred
-    if (error) {
-      return (
-        <div className="text-center text-red-500 mt-10 p-4">
-          <p className="mb-4">Error Loading Messages</p>
-          <p className="text-sm mb-4">
-            {error}
-          </p>
-          <p className="text-xs text-gray-600 mb-4">
-            Check your internet connection or user information
-          </p>
-          <button 
-            onClick={() => {
-              isFetchedRef.current = false;
-              fetchMessages();
-            }} 
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Retry
-          </button>
-        </div>
-      );
-    }
-
-    // No messages
-    if (!messages || messages.length === 0) {
-      return (
-        <div className="text-center text-gray-500 mt-10 p-4">
-          <p className="mb-4">Welcome to Support Chat</p>
-          <p className="text-sm">
-            No messages yet. Start a conversation by sending a message to our support team.
-          </p>
-        </div>
-      );
-    }
-
-    // Render existing messages
-    return messages.map((msg, index) => {
-      // Determine if the message is from the current user
-      const isYours = msg.sender === `${initialUser.application}${initialUser.phoneNumber}` || 
-                      (msg.senderRole === 'user' && msg.senderInfo?.phoneNumber === initialUser.phoneNumber);
-      
-      // Create a message object with additional sender info
-      const messageWithSenderInfo = {
-        ...msg,
-        senderApplication: msg.senderInfo?.application || msg.application,
-        senderPhoneNumber: msg.senderInfo?.phoneNumber || '',
-        message: msg.message || msg.content,  // Ensure message is present
-        createdAt: msg.createdAt,
-        isYours: isYours,
-        isFirstInGroup: index === 0 || !areTimestampsClose(messages[index-1].createdAt, msg.createdAt)
-      };
-
-      return (
-        <Message 
-          key={msg._id} 
-          message={messageWithSenderInfo} 
-          isYours={isYours} 
-        />
-      );
-    });
-  };
+  // Render error state
+  if (error) {
+    return (
+      <div className="text-center text-red-500 p-4">
+        {error}
+        <button 
+          onClick={fetchMessages} 
+          className="ml-2 bg-blue-500 text-white px-3 py-1 rounded"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
+    <div className="flex flex-col h-full">
+      {/* Chat Header */}
+      <div className="bg-gray-100 p-4 flex justify-between items-center">
+        <div className="flex items-center">
+          <FaUser className="mr-2 text-gray-600" />
+          <h3 className="text-lg font-semibold">
+            {initialUser?.name || 'Chat'}
+          </h3>
+        </div>
+      </div>
+
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {renderContent()}
+      <div className="flex-grow overflow-y-auto p-4 space-y-2">
+        {messages.length === 0 ? (
+          <div className="text-center text-gray-500 p-4">
+            No messages yet
+          </div>
+        ) : (
+          messages.map((msg, index) => (
+            <div 
+              key={msg._id || index} 
+              className={`flex ${msg.senderId === initialUser._id ? 'justify-end' : 'justify-start'}`}
+            >
+              <div 
+                className={`
+                  max-w-[70%] p-3 rounded-lg 
+                  ${msg.senderId === initialUser._id 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-gray-200 text-gray-800'}
+                `}
+              >
+                {msg.content}
+                <div className="text-xs mt-1 opacity-70">
+                  {new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Typing Indicator */}
-      {isTyping && (
-        <div className="p-2 text-gray-500 text-sm">
-          Support is typing...
-        </div>
-      )}
-
       {/* Message Input */}
-      <MessageInput 
-        onSendMessage={handleSendMessage} 
-        disabled={isLoading}
-      />
+      <form 
+        onSubmit={handleSendMessage} 
+        className="bg-white p-4 border-t flex items-center"
+      >
+        <input 
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Type a message..."
+          className="flex-grow mr-4 p-2 border rounded-lg"
+        />
+        <button 
+          type="submit" 
+          className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600"
+        >
+          <FaPaperPlane />
+        </button>
+      </form>
     </div>
   );
 };

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaTimesCircle } from 'react-icons/fa';
+import { FaPlus, FaTimesCircle, FaCommentAlt, FaArrowLeft } from 'react-icons/fa';
 import { getUserInfo } from '../utils/localStorageUtils';
 import { superAdminApi } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
+import Chat from './Chat'; 
 import './Components.css';
 
 function SuperAdmin() {
@@ -15,6 +16,8 @@ function SuperAdmin() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [createError, setCreateError] = useState(null);
+  const [selectedChatUser, setSelectedChatUser] = useState(null);
+  const [isChatFullScreen, setIsChatFullScreen] = useState(false);
 
   // Fetch applications on component mount
   useEffect(() => {
@@ -85,6 +88,32 @@ function SuperAdmin() {
     }
   };
 
+  // Handle chat button click
+  const handleChatClick = (app) => {
+    // Create a default user object for chat matching Chat component requirements
+    const defaultChatUser = {
+      application: app._id, // Use application ID as application
+      phoneNumber: `app_${app._id}`, // Unique phone number
+      name: `${app.name} Support`, // Use application name in chat user name
+      role: 'application_support',
+      _id: app._id // Maintain _id for message fetching
+    };
+    
+    setSelectedChatUser(defaultChatUser);
+    setIsChatFullScreen(true);
+  };
+
+  // Close chat
+  const handleCloseChat = () => {
+    setSelectedChatUser(null);
+    setIsChatFullScreen(false);
+  };
+
+  // Go back to applications view from full-screen chat
+  const handleBackToApplications = () => {
+    setIsChatFullScreen(false);
+  };
+
   // Function to handle application management navigation
   const handleManageApplication = (applicationId) => {
     navigate(`/superadmin/applications/${applicationId}/manage`);
@@ -113,50 +142,89 @@ function SuperAdmin() {
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       {/* Application Management Section */}
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Applications</h2>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="bg-blue-500 text-white p-3 rounded-full shadow-lg hover:bg-blue-600 transition flex items-center"
-          >
-            <FaPlus className="w-5 h-5" />
-          </button>
-        </div>
+      <AnimatePresence>
+        {!isChatFullScreen ? (
+          <div className="max-w-4xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">Applications</h2>
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="bg-blue-500 text-white p-3 rounded-full shadow-lg hover:bg-blue-600 transition flex items-center"
+              >
+                <FaPlus className="w-5 h-5" />
+              </button>
+            </div>
 
-        {/* Applications Grid */}
-        {isLoading ? (
-          <div className="text-center text-gray-500">Loading applications...</div>
-        ) : error ? (
-          <div className="text-center text-red-500">{error}</div>
-        ) : applications.length === 0 ? (
-          <div className="text-center text-gray-500">
-            No applications created yet
+            {/* Applications Grid */}
+            {isLoading ? (
+              <div className="text-center text-gray-500">Loading applications...</div>
+            ) : error ? (
+              <div className="text-center text-red-500">{error}</div>
+            ) : applications.length === 0 ? (
+              <div className="text-center text-gray-500">
+                No applications created yet
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {applications.map((app) => (
+                  <div 
+                    key={app._id} 
+                    className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition flex flex-col"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800">{app.name}</h3>
+                    <p className="text-sm text-gray-500 mb-2">
+                      Created: {new Date(app.createdAt).toLocaleDateString()}
+                    </p>
+                    <div className="flex justify-end space-x-2 mt-2">
+                      <button 
+                        onClick={() => handleChatClick(app)}
+                        className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition flex items-center"
+                      >
+                        <FaCommentAlt className="mr-2" /> Chat
+                      </button>
+                      <button 
+                        onClick={() => handleManageApplication(app._id)}
+                        className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition"
+                      >
+                        Manage
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {applications.map((app) => (
-              <div 
-                key={app._id} 
-                className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition flex flex-col"
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed inset-0 z-50 bg-white flex flex-col"
+          >
+            {/* Full-screen Chat Header */}
+            {/* <div className="bg-gray-100 p-4 flex items-center">
+              <button 
+                onClick={handleBackToApplications}
+                className="mr-4 text-gray-700 hover:text-gray-900"
               >
-                <h3 className="text-lg font-semibold text-gray-800">{app.name}</h3>
-                <p className="text-sm text-gray-500 mb-2">
-                  Created: {new Date(app.createdAt).toLocaleDateString()}
-                </p>
-                <div className="flex justify-end space-x-2 mt-2">
-                  <button 
-                    onClick={() => handleManageApplication(app._id)}
-                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition"
-                  >
-                    Manage
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                <FaArrowLeft className="w-6 h-6" />
+              </button>
+              <h2 className="text-xl font-semibold">
+                {selectedChatUser?.name || 'Application Chat'}
+              </h2>
+            </div> */}
+
+            {/* Full-screen Chat Component */}
+            <div className="flex-grow overflow-hidden">
+              <Chat 
+                initialUser={selectedChatUser} 
+                onClose={handleCloseChat} 
+                fullScreen={true}
+              />
+            </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
       {/* iOS-like Modal for Creating Application */}
       <AnimatePresence>
