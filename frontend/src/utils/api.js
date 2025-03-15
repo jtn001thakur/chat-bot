@@ -224,6 +224,53 @@ export const chatApi = {
   }
 };
 
+// Admin API methods
+export const adminApi = {
+  // Fetch applications for the current admin
+  getAdminApplications: async () => {
+    try {
+      const response = await api.get('/admin/applications');
+      return response.data.applications || [];
+    } catch (error) {
+      console.error('Failed to fetch admin applications:', error);
+      throw error;
+    }
+  },
+
+  // Get all users (if needed)
+  getAllUsers: async () => {
+    try {
+      const response = await api.get('/admin/users');
+      return response.data.users || [];
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+      throw error;
+    }
+  },
+
+  // Block a user
+  blockUser: async (userId) => {
+    try {
+      const response = await api.post(`/admin/users/${userId}/block`);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to block user ${userId}:`, error);
+      throw error;
+    }
+  },
+
+  // Unblock a user
+  unblockUser: async (userId) => {
+    try {
+      const response = await api.post(`/admin/users/${userId}/unblock`);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to unblock user ${userId}:`, error);
+      throw error;
+    }
+  }
+};
+
 // Superadmin API methods
 export const superAdminApi = {
   // Application Management

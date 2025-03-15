@@ -14,10 +14,10 @@ function SuperAdmin() {
   const [newApplicationName, setNewApplicationName] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [createError, setCreateError] = useState(null);
-  const [selectedChatUser, setSelectedChatUser] = useState(null);
   const [isChatFullScreen, setIsChatFullScreen] = useState(false);
+  const [selectedChatUser, setSelectedChatUser] = useState(null);
+  const [error, setError] = useState(null);
 
   // Fetch applications on component mount
   useEffect(() => {
@@ -69,7 +69,27 @@ function SuperAdmin() {
       });
 
       // Update applications list with new app
-      setApplications([...applications, createdApp]);
+      const newApplication = {
+        ...createdApp.application,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        __v: 0,
+        admins: [
+          {
+            customId: `${createdApp.application.name.toLowerCase()}${userInfo._id}`,
+            phoneNumber: userInfo.phoneNumber,
+            name: userInfo.name,
+            _id: userInfo._id
+          }
+        ],
+        createdBy: {
+          _id: userInfo._id,
+          name: userInfo.name,
+          phoneNumber: userInfo.phoneNumber
+        }
+      };
+      
+      setApplications([...applications, newApplication]);
       
       // Reset form
       setNewApplicationName('');
@@ -230,7 +250,7 @@ function SuperAdmin() {
       <AnimatePresence>
         {isModalOpen && (
           <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 backdrop-blur-sm"
             onClick={() => setIsModalOpen(false)}
           >
             <motion.div
@@ -238,26 +258,26 @@ function SuperAdmin() {
               initial="hidden"
               animate="visible"
               exit="hidden"
-              className="bg-white w-96 rounded-xl shadow-2xl p-6"
+              className="bg-white w-96 rounded-2xl shadow-2xl p-6 border border-blue-100"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold text-blue-800">
                   Create Application
                 </h3>
                 <button 
                   onClick={() => setIsModalOpen(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-blue-500 hover:text-blue-700 transition"
                 >
-                  <FaTimesCircle className="w-6 h-6" />
+                  <FaTimesCircle className="w-7 h-7" />
                 </button>
               </div>
 
               <form onSubmit={handleCreateApplication}>
-                <div className="mb-4">
+                <div className="mb-6">
                   <label 
                     htmlFor="appName" 
-                    className="block text-sm font-medium text-gray-700 mb-2"
+                    className="block text-sm font-medium text-blue-700 mb-2"
                   >
                     Application Name
                   </label>
@@ -269,22 +289,22 @@ function SuperAdmin() {
                       setNewApplicationName(e.target.value);
                       setCreateError(null);
                     }}
-                    placeholder="Enter application name"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter a unique application name"
+                    className="w-full px-4 py-3 border-2 border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                     required
                   />
                   {createError && (
-                    <p className="text-red-500 text-sm mt-2">{createError}</p>
+                    <p className="text-red-500 text-sm mt-2 animate-pulse">{createError}</p>
                   )}
                 </div>
 
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className={`w-full py-3 rounded-md text-white transition ${
+                  className={`w-full py-3 rounded-xl text-white font-semibold transition transform hover:scale-105 ${
                     isLoading 
                       ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-blue-500 hover:bg-blue-600'
+                      : 'bg-blue-600 hover:bg-blue-700'
                   }`}
                 >
                   {isLoading ? 'Creating...' : 'Create Application'}

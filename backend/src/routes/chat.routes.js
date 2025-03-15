@@ -12,7 +12,7 @@ router.post('/send-message',
 
 // Route to get messages
 router.post('/messages', 
-            verifyToken,
+            // verifyToken,
             chatController.getMessages
 );
 

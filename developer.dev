@@ -5,3 +5,6 @@ import {
   getUserInfo 
 } from './utils/localStorageUtils';
 
+ok but admin only have one app access dont have othere app access only keep here caht ui 
+superamdin making applicaiotn and there admin now we making logic for superamdin created admin can lgoin here and reply only there app
+and login accoirdngly form superadmin admin create we will give access to superadmin for give password to superamdin

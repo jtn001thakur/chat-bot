@@ -75,3 +75,183 @@
   color: #666;
   font-size: 0.9rem;
 }
+
+.admin-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.admin-dashboard .dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+  flex-grow: 1;
+  overflow: hidden;
+  padding: 20px;
+}
+
+.admin-dashboard .dashboard-section {
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-dashboard .applications-list h3 {
+  padding: 15px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f3f4f6;
+  font-weight: 600;
+}
+
+.admin-dashboard .app-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-dashboard .app-card:hover {
+  background-color: #f3f4f6;
+}
+
+.admin-dashboard .app-card.selected {
+  background-color: #e6f2ff;
+  border-left: 4px solid #3b82f6;
+}
+
+.admin-dashboard .app-card h4 {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.admin-dashboard .app-stats {
+  display: flex;
+  gap: 15px;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.admin-dashboard .no-app-selected {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  text-align: center;
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.admin-dashboard .chat-section {
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.admin-dashboard .chat-section .system-message {
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 10px auto;
+  max-width: 80%;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-dashboard .chat-section .system-message svg {
+  margin-right: 8px;
+  color: #3b82f6;
+}
+
+.admin-dashboard .superadmin-layout {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  gap: 20px;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.admin-dashboard .admin-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.admin-dashboard .app-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f3f4f6;
+}
+
+.admin-dashboard .navigation-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-dashboard .nav-button {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.admin-dashboard .nav-button:hover {
+  background-color: #2563eb;
+}
+
+.admin-dashboard .nav-button.disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-dashboard .current-app-info {
+  padding: 15px;
+}
+
+.admin-dashboard .current-app-info h4 {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 10px;
+}
+
+.role-badge.super-admin {
+  background-color: #9C27B0;
+}
+
+/* Responsive layout for smaller screens */
+@media (max-width: 768px) {
+  .admin-dashboard .dashboard-grid,
+  .admin-dashboard .superadmin-layout {
+    grid-template-columns: 1fr;
+  }
+}

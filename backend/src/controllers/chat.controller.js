@@ -4,78 +4,70 @@ import User from '../models/user.model.js';
 export const sendMessage = async (req, res) => {
   try {
     const {
-      receiver,
-      message,
+      receiverId,
+      content,
       application,
-      metadata,
-      role,
+      metadata = {},
+      role = 'external',
       phoneNumber
     } = req.body;
 
-    // console.log("Received message payload:", {
-    //   message,
-    //   receiver,
-    //   application,
-    //   metadata,
-    //   role,
-    //   phoneNumber
-    // });
+    // Validate required fields
+    if (!content || !application) {
+      return res.status(400).json({ 
+        message: 'Content and application are required' 
+      });
+    }
 
     let sender = null;
     let receiverIds = [];
 
-    if (role === 'user') {
-      // Create sender details for external user
-      sender = `${application}${phoneNumber}`;
-    } else if (role === 'admin' || role === 'superadmin') {
-      // Existing admin/superadmin logic
-      const user = await User.findOne({ 
-        $or: [
-          { _id: receiver },
-          { combinedId: receiver }
-        ]
-      });
+    // Determine sender based on role
+    switch (role) {
+      case 'user':
+        // For user, create a unique external sender ID
+        sender = `${application}${phoneNumber}`;
+        break;
       
-      if (!user) {
-        return res.status(404).json({ message: 'Receiver not found' });
-      }
+      case 'admin':
+      case 'superadmin':
+        // For admin/superadmin, use the provided receiverId or find a user
+        if (receiverId) {
+          const user = await User.findOne({ 
+            $or: [
+              { _id: receiverId },
+              { combinedId: receiverId }
+            ]
+          });
+          
+          if (!user) {
+            return res.status(404).json({ message: 'Receiver not found' });
+          }
+          
+          sender = user._id;
+          receiverIds = [receiverId];
+        }
+        break;
       
-      sender = user._id;
+      case 'application_support':
+        // For application support, use application as sender context
+        sender = `app_${application}`;
+        break;
       
-      // If a specific receiver is provided
-      if (receiver) {
-        receiverIds = [receiver];
-      }
+      default:
+        sender = 'unknown';
     }
 
-    // Determine receivers based on role
-    if (receiver) {
-      receiverIds = [receiver];
-    } else if (role === 'user') {
-      // For user messages, leave receivers empty or set to support
-      receiverIds = [];
-    }
-
+    // Create new message
     const newMessage = new Message({
-      // Optional sender details
       sender: sender,
       externalSenderId: role === 'user' ? `${application}${phoneNumber}` : null,
-
-      // Receivers
       receivers: receiverIds,
-
-      // Message content
-      message: message,
-      content: message,  // Duplicate for backward compatibility
-
-      // Sender details
-      senderRole: role || 'external',
-
-      // Application details
+      message: content,
+      content,  // Duplicate for backward compatibility
+      senderRole: role,
       application: application,
-
-      // Metadata
-      metadata: metadata || {}
+      metadata: metadata
     });
 
     await newMessage.save();
@@ -103,7 +95,11 @@ export const getMessages = async (req, res) => {
       role,
       phoneNumber
     } = req.body;
-    
+    console.log('application : ', application)
+    console.log('limit : ', limit)
+    console.log('skip : ', skip)
+    console.log('role : ', role)
+    console.log('phoneNumber : ', phoneNumber)
     // For user role, create a unique userId
     const userId = role === 'user' ? `${application}${phoneNumber}` : null;
     

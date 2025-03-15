@@ -1,6 +1,7 @@
 import User from '../models/user.model.js';
 import Otp from '../models/otp.model.js';
 import Token from '../models/token.model.js';
+import Application from '../models/application.model.js';
 import { sendOTPViaSMS } from '../utils/otpUtils.js';
 import { generateTokens } from '../utils/tokenUtils.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,7 +10,7 @@ import bcrypt from 'bcryptjs';
 
 export const login = async (req, res) => {
   try {
-    const { phoneNumber, password } = req.sanitizedBody; // Using sanitized input
+    const { phoneNumber, password } = req.sanitizedBody;
     console.log('Login Attempt - Phone Number:', phoneNumber, 'Password:', password);
     
     // Find user by phone number
@@ -67,13 +68,22 @@ export const login = async (req, res) => {
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
     });
 
-    // Prepare user response (exclude sensitive fields)
-    const userResponse = {
+    // Prepare user response
+    let userResponse = {
       _id: user._id,
       phoneNumber: user.phoneNumber,
       name: user.name,
       role: user.role
     };
+
+    // If user is an admin, fetch their applications
+    if (user.role === 'admin') {
+      const applications = await Application.find({ 
+        admins: { $elemMatch: { _id: user._id } } 
+      }).select('_id name userCount chatCount');
+
+      userResponse.applications = applications;
+    }
 
     // Set tokens as HTTP-only cookies
     res.cookie('accessToken', accessToken, {

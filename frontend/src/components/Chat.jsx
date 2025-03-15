@@ -1,62 +1,74 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FaPaperPlane, FaUser } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaPaperPlane, FaUser, FaInfoCircle } from 'react-icons/fa';
 import { chatApi } from '../utils/api';
 
 const Chat = ({ 
   initialUser, 
   fullScreen = false, 
-  onClose 
+  onClose,
+  initialMessages = [],
+  disableInput = false
 }) => {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(initialMessages);
   const [newMessage, setNewMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(initialMessages.length === 0);
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
+  const fetchedRef = useRef(false);
 
-  // Fetch messages when component mounts or user changes
-  const fetchMessages = useCallback(async () => {
-    if (!initialUser) {
-      setError('No user information provided');
+  // Fetch messages only once on mount
+  useEffect(() => {
+    // Skip fetching if we already have initial messages
+    if (initialMessages.length > 0) {
       setIsLoading(false);
       return;
     }
 
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      console.log('Fetching messages for:', initialUser);
-
-      const queryParams = {
-        application: initialUser.application || initialUser._id,
-        phoneNumber: initialUser.phoneNumber || `app_${initialUser._id}`,
-        limit: 100,
-        skip: 0,
-        role: initialUser.role || 'application_support'
-      };
-
-      console.log('Query Parameters:', queryParams);
-
-      const response = await chatApi.getMessages(queryParams);
-      
-      console.log('API Response:', response);
-
-      const fetchedMessages = response.messages || response || [];
-      
-      setMessages(fetchedMessages);
-    } catch (err) {
-      console.error('Error fetching messages:', err);
-      setError(err.message || 'Failed to fetch messages');
-      setMessages([]);
-    } finally {
+    // Skip if we've already fetched or there's no user
+    if (fetchedRef.current || !initialUser) {
+      if (!initialUser) {
+        setError('No user information provided');
+      }
       setIsLoading(false);
+      return;
     }
-  }, [initialUser]);
 
-  // Fetch messages on mount
-  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        console.log('Fetching messages for:', initialUser);
+
+        const queryParams = {
+          application: initialUser.application || initialUser._id,
+          phoneNumber: initialUser.phoneNumber || `app_${initialUser._id}`,
+          limit: 100,
+          skip: 0,
+          role: initialUser.role || 'application_support'
+        };
+
+        console.log('Query Parameters:', queryParams);
+
+        const response = await chatApi.getMessages(queryParams);
+        
+        console.log('API Response:', response);
+
+        const fetchedMessages = response.messages || response || [];
+        
+        setMessages(fetchedMessages);
+      } catch (err) {
+        console.error('Error fetching messages:', err);
+        setError(err.message || 'Failed to fetch messages');
+        setMessages([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchedRef.current = true;
     fetchMessages();
-  }, [fetchMessages]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -69,13 +81,16 @@ const Chat = ({
   const handleSendMessage = async (e) => {
     e.preventDefault();
     
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || disableInput) return;
 
     try {
       const messageData = {
         receiverId: initialUser._id,
         content: newMessage.trim(),
-        application: initialUser.application || initialUser._id
+        application: initialUser.application || initialUser._id,
+        metadata: {},
+        role: initialUser.role || 'application_support',
+        phoneNumber: initialUser.phoneNumber || `app_${initialUser._id}`
       };
 
       const sentMessage = await chatApi.sendMessage(messageData);
@@ -88,6 +103,37 @@ const Chat = ({
     } catch (error) {
       console.error('Failed to send message:', error);
       setError('Failed to send message');
+    }
+  };
+
+  // Manual refresh function
+  const handleRefresh = async () => {
+    if (!initialUser) {
+      setError('No user information provided');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const queryParams = {
+        application: initialUser.application || initialUser._id,
+        phoneNumber: initialUser.phoneNumber || `app_${initialUser._id}`,
+        limit: 100,
+        skip: 0,
+        role: initialUser.role || 'application_support'
+      };
+
+      const response = await chatApi.getMessages(queryParams);
+      const fetchedMessages = response.messages || response || [];
+      
+      setMessages(fetchedMessages);
+    } catch (err) {
+      console.error('Error refreshing messages:', err);
+      setError(err.message || 'Failed to refresh messages');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -106,7 +152,7 @@ const Chat = ({
       <div className="text-center text-red-500 p-4">
         {error}
         <button 
-          onClick={fetchMessages} 
+          onClick={handleRefresh} 
           className="ml-2 bg-blue-500 text-white px-3 py-1 rounded"
         >
           Retry
@@ -125,6 +171,14 @@ const Chat = ({
             {initialUser?.name || 'Chat'}
           </h3>
         </div>
+        {!disableInput && (
+          <button 
+            onClick={handleRefresh}
+            className="text-blue-500 hover:text-blue-700 text-sm"
+          >
+            Refresh
+          </button>
+        )}
       </div>
 
       {/* Messages Container */}
@@ -137,20 +191,27 @@ const Chat = ({
           messages.map((msg, index) => (
             <div 
               key={msg._id || index} 
-              className={`flex ${msg.senderId === initialUser._id ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${msg.isSystemMessage ? 'justify-center' : msg.senderId === initialUser._id ? 'justify-end' : 'justify-start'}`}
             >
               <div 
                 className={`
                   max-w-[70%] p-3 rounded-lg 
-                  ${msg.senderId === initialUser._id 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-gray-200 text-gray-800'}
+                  ${msg.isSystemMessage 
+                    ? 'bg-gray-100 text-gray-600 border border-gray-300 flex items-center' 
+                    : msg.senderId === initialUser._id 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-200 text-gray-800'}
                 `}
               >
+                {msg.isSystemMessage && <FaInfoCircle className="mr-2" />}
                 {msg.content}
-                <div className="text-xs mt-1 opacity-70">
-                  {new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </div>
+                {!msg.isSystemMessage && (
+                  <div className="text-xs mt-1 opacity-70">
+                    {msg.timestamp 
+                      ? new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                      : new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </div>
+                )}
               </div>
             </div>
           ))
@@ -167,12 +228,14 @@ const Chat = ({
           type="text"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Type a message..."
+          placeholder={disableInput ? "Messaging disabled" : "Type a message..."}
           className="flex-grow mr-4 p-2 border rounded-lg"
+          disabled={disableInput}
         />
         <button 
           type="submit" 
-          className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600"
+          className={`${disableInput ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'} text-white p-2 rounded-full`}
+          disabled={disableInput}
         >
           <FaPaperPlane />
         </button>
